@@ -368,6 +368,6 @@ def test_docs_i18n_tables_are_complete_and_symmetric():
 
 def test_docs_nested_titles_keep_their_span():
     page = (DOCS / "index.html").read_text(encoding="utf-8")
-    for key in ("hosted_title_hi", "features_title_hi", "models_title_hi", "qs_title_hi", "faq_title_hi", "cta_title_hi"):
+    for key in ("features_title_hi", "models_title_hi", "qs_title_hi", "faq_title_hi", "cta_title_hi"):
         assert f'data-i18n="{key}"' in page
     assert '<h2 data-i18n="cta_title">Free models.<br /><span class="grad-text" data-i18n="cta_title_hi">Your API.</span></h2>' in page

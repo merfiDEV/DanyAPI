@@ -8,29 +8,7 @@ OpenAI compatible HTTP API built on Python + FastAPI. Instead of the paid APIs i
 [![Docker](https://img.shields.io/badge/GHCR-ghcr.io%2Ffanatfanata%2Fdanyapi-blue)](https://github.com/FANATFANATA/DanyAPI/pkgs/container/danyapi)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/FANATFANATA/DanyAPI/blob/prod/LICENSE)
 
-## Public hosted instance
-
-A public instance is already running in production (BYOK_MODE=1):
-
-- API base URL: `https://danyapi.cloudpub.ru/v1/`
-
-Point any OpenAI compatible client at API base URL with a valid tokens, unauthenticated requests are rejected with 401. The API key should be the raw token (e.g. "token1,token2", same in .env). The `alice`, `alice-ai`, `yagpt` and Duck.ai models need no key and are reachable without one; DeepSeek, Qwen, GigaChat and OpenCode Zen models return 401 without a key. `GET /health` reports every provider as enabled in this mode, with `byok_api_key_required` naming the ones that need a key.
-
-### Example request
-
-```bash
-curl -X POST https://danyapi.cloudpub.ru/v1/chat/completions \
-  -H "Authorization: Bearer token1,token2,token3" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "deepseek-v4.1-flash-thinking",
-    "messages": [
-      {"role": "user", "content": "Hi from example request!"}
-    ]
-  }'
-```
-
-### Endpoints
+## Endpoints
 
 - `POST /v1/chat/completions` and `POST /v1/completions`: OpenAI compatible
 - `POST /v1/embeddings` and `POST /v1/moderations`
@@ -270,7 +248,7 @@ Send `"mcp": true` in a `POST /v1/chat/completions` body to run the loop for tha
 
 A round works like this: the request goes to the provider as usual, tools included; if the answer carries `tool_calls`, the server executes each call against the MCP server that owns the tool, appends the results as `role: tool` messages and asks the provider again; a plain answer ends the loop. A tool that fails or does not exist returns its error text as the tool result, so the model can recover instead of the request failing. When the iteration limit is hit mid-loop the last model message is returned with a note naming the limit.
 
-In BYOK mode the loop works the same: the `"mcp"` flag travels in the request body, the model requests authenticate with the caller's own key from the `Authorization` header, and every iteration draws from that caller's pool. MCP servers themselves are a host resource: they are read from `MCP_SERVERS` in the server's `.env` and executed on the server, a request cannot register its own. Keep that in mind before enabling `MCP_SERVERS` on a public instance, because every caller would be able to trigger host-side tool execution; the built-in `web_search` is the safer one to expose.
+In BYOK mode the loop works the same: the `"mcp"` flag travels in the request body, the model requests authenticate with the caller's own key from the `Authorization` header, and every iteration draws from that caller's pool. MCP servers themselves are a host resource: they are read from `MCP_SERVERS` in the server's `.env` and executed on the server, a request cannot register its own. Keep that in mind before enabling `MCP_SERVERS` on a server exposed to callers you do not trust, because every caller would be able to trigger host-side tool execution; the built-in `web_search` is the safer one to expose.
 
 ## Models
 

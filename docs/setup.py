@@ -62,7 +62,7 @@ GROUPS = [
         ],
     ),
     (
-        "Public instance",
+        "BYOK",
         [
             (
                 "BYOK_MODE",

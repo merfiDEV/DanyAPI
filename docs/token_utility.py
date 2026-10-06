@@ -58,11 +58,9 @@ TEXTS: dict[str, str] = {
     "step2_waiting": "Waiting for the Qwen token...",
     "step3_heading": "Tokens successfully extracted!",
     "step3_text": "Redirecting to your tokens...",
-    "footer_public_instance": "Public Instance",
     "footer_docs": "Docs",
     "footer_github": "GitHub",
-    "footer_public_url": "https://danyapi.cloudpub.ru",
-    "footer_docs_url": "https://danyapi.cloudpub.ru/docs/",
+    "footer_docs_url": "https://fanatfanata.github.io/DanyAPI/",
     "footer_github_url": "https://github.com/FANATFANATA/DanyAPI",
     "js_title_wizard": "DanyAPI token utilities",
     "js_title_step1": "Step 1 of 2 - DeepSeek",
@@ -75,14 +73,11 @@ TEXTS: dict[str, str] = {
     "js_fail": "No token found - you are probably not logged in. Log in on {provider}, then try again.",
     "results_page_title": "DanyAPI - Your tokens",
     "results_title": "Your Tokens",
-    "results_sub": "Tokens for DeepSeek &amp; Qwen were successfully extracted. Use them in your <code>.env</code> when"
-    " running the API locally.<br><br>To support us, you can also add them to the public API instance:"
-    ' <a href="{public_url}" target="_blank" rel="noopener">{public_url}</a>',
+    "results_sub": "Tokens for DeepSeek &amp; Qwen were successfully extracted. Use them in your <code>.env</code> when running the API locally.",
     "results_other_providers": "Two more providers need no browser token: add a GigaChat authorization key as"
     " <code>GIGACHAT_KEYS</code> from the Studio API settings and an OpenCode Zen key as"
     " <code>OPENCODE_KEYS</code> from <code>opencode.ai/auth</code>, or set <code>ALICE_ENABLED=1</code> for the"
     " unofficial keyless Alice provider.",
-    "results_public_instance": "Public instance",
     "results_pane_ds": "DeepSeek token",
     "results_pane_qw": "Qwen token",
     "results_copy": "Copy",
@@ -475,7 +470,6 @@ SETUP_PAGE = r"""<!DOCTYPE html>
   </div>
 
   <div class="footer-link">
-    <a href="__footer_public_url__" target="_blank" rel="noopener">__footer_public_instance__</a> &middot;
     <a href="__footer_docs_url__" target="_blank" rel="noopener">__footer_docs__</a> &middot;
     <a href="__footer_github_url__" target="_blank" rel="noopener">__footer_github__</a>
   </div>
@@ -876,13 +870,12 @@ def render_results_page() -> str:
     def show(tok: str | None) -> str:
         return html_escape(tok) if tok else TEXTS["results_no_token"]
 
-    public_url = TEXTS["footer_public_url"]
     return _apply_texts(
         _RESULTS_PAGE_STATIC,
         {
             "DEEPSEEK_TOKEN": show(STATE["deepseek"]),
             "QWEN_TOKEN": show(STATE["qwen"]),
-            "RESULTS_SUB": TEXTS["results_sub"].replace("{public_url}", public_url),
+            "RESULTS_SUB": TEXTS["results_sub"],
             "RESULTS_OTHER_PROVIDERS": TEXTS["results_other_providers"],
         },
     )
