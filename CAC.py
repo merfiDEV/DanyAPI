@@ -63,38 +63,27 @@ def run_collecter() -> None:
 
 
 def split_chunks(xml_text: str, max_bytes: int) -> list[str]:
-    lines = xml_text.splitlines()
-    header: list[str] = []
-    footer: list[str] = []
-    files: list[str] = []
-    for line in lines:
-        stripped = line.strip()
-        if stripped.startswith("<file ") or stripped.startswith("<file>"):
-            files.append(line)
-        elif stripped.startswith("<collection"):
-            header.append(line)
-        elif stripped.startswith("</collection>"):
-            footer.append(line)
-        elif not files:
-            header.append(line)
+    header_match = re.match(r"(?s)^(.*?)(?=<file[ >])", xml_text)
+    footer_match = re.search(r"(?s)</collection>\s*$", xml_text)
+    header = header_match.group(1) if header_match else ""
+    footer = footer_match.group(0) if footer_match else ""
+    files = re.findall(r"(?s)<file[ >].*?</file>", xml_text)
     if not files:
         return [xml_text]
     chunks: list[str] = []
     current: list[str] = []
     current_size = 0
-    head = "\n".join(header)
-    tail = "\n".join(footer)
-    overhead = len(head.encode("utf-8")) + len(tail.encode("utf-8")) + 2
-    for line in files:
-        line_size = len(line.encode("utf-8")) + 1
-        if current and current_size + line_size + overhead > max_bytes:
-            chunks.append("\n".join([*header, *current, *footer]))
+    overhead = len(header.encode("utf-8")) + len(footer.encode("utf-8"))
+    for file_text in files:
+        file_size = len(file_text.encode("utf-8"))
+        if current and current_size + file_size + overhead > max_bytes:
+            chunks.append(header + "\n".join(current) + footer)
             current = []
             current_size = 0
-        current.append(line)
-        current_size += line_size
+        current.append(file_text)
+        current_size += file_size
     if current:
-        chunks.append("\n".join([*header, *current, *footer]))
+        chunks.append(header + "\n".join(current) + footer)
     return chunks
 
 
