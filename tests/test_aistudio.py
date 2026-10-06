@@ -25,7 +25,8 @@ from danyapi.api.models import _resolve_provider
 def _event(text: str, thought: bool = False) -> list:
     part: list[object] = [None, text]
     if thought:
-        part = [None] * 12 + [1]
+        part = [None] * 12
+        part.append(1)
         part[1] = text
     content = [[part], "model"]
     return [[[content, 1]]]

@@ -11,6 +11,7 @@ from collections.abc import Iterable
 import certifi
 import httpcore
 import httpx
+from httpcore._backends.anyio import AnyIOBackend
 
 log = logging.getLogger("danyapi.aistudio.doh")
 
@@ -144,7 +145,7 @@ class DohResolver:
         return addresses
 
 
-class DohNetworkBackend(httpcore.AnyIOBackend):
+class DohNetworkBackend(AnyIOBackend):
     def __init__(self, resolver: DohResolver, suffixes: Iterable[str] = DOH_HOST_SUFFIXES) -> None:
         self._resolver = resolver
         self._suffixes = tuple(suffixes)

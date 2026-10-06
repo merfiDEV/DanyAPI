@@ -105,7 +105,7 @@ class StudioBrowser:
             if self._started:
                 return
             try:
-                from camoufox.async_api import AsyncCamoufox
+                from camoufox.async_api import AsyncCamoufox  # type: ignore[import-not-found]
             except ImportError as exc:
                 raise BrowserError("camoufox is not installed, run pip install camoufox and camoufox fetch") from exc
             launch: dict[str, Any] = {

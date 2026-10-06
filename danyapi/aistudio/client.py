@@ -68,7 +68,7 @@ def auth_header(cookies: dict[str, str], timestamp: int | None = None) -> str:
     if not sapisid:
         raise AistudioError(401, "aistudio cookies have no SAPISID")
     ts = int(time.time()) if timestamp is None else timestamp
-    digest = hashlib.sha1(f"{ts} {sapisid} {STUDIO_ORIGIN}".encode()).hexdigest()
+    digest = hashlib.sha1(f"{ts} {sapisid} {STUDIO_ORIGIN}".encode(), usedforsecurity=False).hexdigest()
     return f"SAPISIDHASH {ts}_{digest}"
 
 
