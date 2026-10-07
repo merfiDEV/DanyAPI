@@ -802,11 +802,11 @@ def test_get_model_found_and_missing():
     try:
         client = TestClient(app)
         ok = client.get("/v1/models/default")
-        alias = client.get("/v1/models/default-thinking")
+        absent_sibling = client.get("/v1/models/default-thinking")
         missing = client.get("/v1/models/does-not-exist")
         client.close()
         assert ok.status_code == 200
-        assert alias.status_code == 200
+        assert absent_sibling.status_code == 404
         assert missing.status_code == 404
     finally:
         app.state.qwen_models = []

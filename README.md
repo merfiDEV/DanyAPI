@@ -267,7 +267,7 @@ Model lists are not hardcoded. Every provider is asked where it runs and the ans
 
 The lists are fetched at startup and refetched every `DANYAPI_MODELS_REFRESH_SECONDS`, and a fetch that fails or comes back empty keeps the last good list rather than emptying `GET /v1/models`. Send `?refresh=1` to `GET /v1/models`, or pass a key in `Authorization` or `x-api-key`, to force a refetch right now and, for GigaChat, to read the list your own key is granted.
 
-Only models the upstream marks enabled are listed, so a DeepSeek model type the account is not given does not appear. DeepSeek's only upstream type today is `default`, served publicly as `deepseek-v4.1-flash`, with a `-thinking` sibling that toggles reasoning; the raw `default` id still resolves as an alias. In BYOK mode the keyless providers are catalogued from the same endpoints without any key, and GigaChat joins the list as soon as a request arrives with a key.
+Only models the upstream marks enabled are listed, so a DeepSeek model type the account is not given does not appear. DeepSeek's only upstream type today is `default`, served publicly as `deepseek-v4.1-flash`; reasoning turns on with the `thinking` flag or `reasoning_effort` on that same id, and the raw `default` id still resolves as an alias. In BYOK mode the keyless providers are catalogued from the same endpoints without any key, and GigaChat joins the list as soon as a request arrives with a key.
 
 OpenCode Zen is the one provider with two ways to name the same model. `GET /v1/models` returns the bare id, and a bare id is what routes, but an id that another provider also owns needs the `opencode/` prefix to say which one is meant.
 

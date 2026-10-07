@@ -213,7 +213,7 @@ async def test_resolve_model_unknown_raises_404():
     assert excinfo.value.status_code == 404
 
 
-def test_models_list_exposes_deepseek_ids_and_thinking_siblings():
+def test_models_list_exposes_deepseek_ids_without_thinking_siblings():
     app.state.deepseek_models = [
         {
             "id": "default",
@@ -229,7 +229,7 @@ def test_models_list_exposes_deepseek_ids_and_thinking_siblings():
     client.close()
     ids = [entry["id"] for entry in data["data"]]
     assert "default" in ids
-    assert "default-thinking" in ids
+    assert "default-thinking" not in ids
     owner = {entry["id"]: entry["owned_by"] for entry in data["data"]}
     assert owner["default"] == "deepseek"
 

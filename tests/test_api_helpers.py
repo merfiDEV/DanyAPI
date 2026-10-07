@@ -997,7 +997,7 @@ def test_list_models():
         client.close()
         ids = [m["id"] for m in data["data"]]
         assert "default" in ids
-        assert "default-thinking" in ids
+        assert "default-thinking" not in ids
         assert "qwen3.8-max" in ids
     finally:
         app.state.qwen_models = []

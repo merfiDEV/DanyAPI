@@ -433,9 +433,6 @@ def _models_state() -> list[dict]:
             if optional in model:
                 entry[optional] = model[optional]
         models.append(entry)
-        if owner == "deepseek":
-            for suffix in REASONING_SUFFIXES:
-                models.append({**entry, "id": f"{model['id']}{suffix}"})
     cached["key"] = key
     cached["models"] = models
     cached["index"] = {m["id"]: m for m in models}
