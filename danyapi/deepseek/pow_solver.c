@@ -28,9 +28,13 @@
 #define MAX_DIFFICULTY 2000000000LL
 #define TIME_BUDGET_SEC 45.0
 #define TIME_CHECK_STRIDE 4096
+#define WORK_BLOCK 4096
 
 static _Atomic int g_found = 0;
 static _Atomic long long g_deadline_ms = -1;
+static _Atomic uint64_t g_next = 0;
+static _Atomic uint64_t g_limit = 0;
+static _Atomic uint64_t g_best = UINT64_MAX;
 
 static const uint64_t RC[24] = {
     0x0000000000000001ULL, 0x0000000000008082ULL, 0x800000000000808aULL,
@@ -43,90 +47,120 @@ static const uint64_t RC[24] = {
     0x8000000000008080ULL, 0x0000000080000001ULL, 0x8000000080008008ULL,
 };
 
-static inline uint64_t rotl64(uint64_t x, int n) {
+static inline uint64_t rol64(uint64_t x, int n) {
   n &= 63;
   if (n == 0)
     return x;
   return (x << n) | (x >> (64 - n));
 }
 
+#define KECCAK_ROUND(rc)                                                       \
+  do {                                                                         \
+    uint64_t c0, c1, c2, c3, c4, d0, d1, d2, d3, d4;                           \
+    uint64_t p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12;           \
+    uint64_t p13, p14, p15, p16, p17, p18, p19, p20, p21, p22, p23, p24;       \
+    c0 = A00 ^ A01 ^ A02 ^ A03 ^ A04;                                          \
+    c1 = A10 ^ A11 ^ A12 ^ A13 ^ A14;                                          \
+    c2 = A20 ^ A21 ^ A22 ^ A23 ^ A24;                                          \
+    c3 = A30 ^ A31 ^ A32 ^ A33 ^ A34;                                          \
+    c4 = A40 ^ A41 ^ A42 ^ A43 ^ A44;                                          \
+    d0 = c4 ^ rol64(c1, 1);                                                    \
+    d1 = c0 ^ rol64(c2, 1);                                                    \
+    d2 = c1 ^ rol64(c3, 1);                                                    \
+    d3 = c2 ^ rol64(c4, 1);                                                    \
+    d4 = c3 ^ rol64(c0, 1);                                                    \
+    A00 ^= d0; A01 ^= d0; A02 ^= d0; A03 ^= d0; A04 ^= d0;                     \
+    A10 ^= d1; A11 ^= d1; A12 ^= d1; A13 ^= d1; A14 ^= d1;                     \
+    A20 ^= d2; A21 ^= d2; A22 ^= d2; A23 ^= d2; A24 ^= d2;                     \
+    A30 ^= d3; A31 ^= d3; A32 ^= d3; A33 ^= d3; A34 ^= d3;                     \
+    A40 ^= d4; A41 ^= d4; A42 ^= d4; A43 ^= d4; A44 ^= d4;                     \
+    p0 = A00;                                                                  \
+    p1 = rol64(A11, 44);                                                       \
+    p2 = rol64(A22, 43);                                                       \
+    p3 = rol64(A33, 21);                                                       \
+    p4 = rol64(A44, 14);                                                       \
+    p5 = rol64(A30, 28);                                                       \
+    p6 = rol64(A41, 20);                                                       \
+    p7 = rol64(A02, 3);                                                        \
+    p8 = rol64(A13, 45);                                                       \
+    p9 = rol64(A24, 61);                                                       \
+    p10 = rol64(A10, 1);                                                       \
+    p11 = rol64(A21, 6);                                                       \
+    p12 = rol64(A32, 25);                                                      \
+    p13 = rol64(A43, 8);                                                       \
+    p14 = rol64(A04, 18);                                                      \
+    p15 = rol64(A40, 27);                                                      \
+    p16 = rol64(A01, 36);                                                      \
+    p17 = rol64(A12, 10);                                                      \
+    p18 = rol64(A23, 15);                                                      \
+    p19 = rol64(A34, 56);                                                      \
+    p20 = rol64(A20, 62);                                                      \
+    p21 = rol64(A31, 55);                                                      \
+    p22 = rol64(A42, 39);                                                      \
+    p23 = rol64(A03, 41);                                                      \
+    p24 = rol64(A14, 2);                                                       \
+    A00 = p0 ^ ((~p1) & p2);                                                   \
+    A10 = p1 ^ ((~p2) & p3);                                                   \
+    A20 = p2 ^ ((~p3) & p4);                                                   \
+    A30 = p3 ^ ((~p4) & p0);                                                   \
+    A40 = p4 ^ ((~p0) & p1);                                                   \
+    A01 = p5 ^ ((~p6) & p7);                                                   \
+    A11 = p6 ^ ((~p7) & p8);                                                   \
+    A21 = p7 ^ ((~p8) & p9);                                                   \
+    A31 = p8 ^ ((~p9) & p5);                                                   \
+    A41 = p9 ^ ((~p5) & p6);                                                   \
+    A02 = p10 ^ ((~p11) & p12);                                                \
+    A12 = p11 ^ ((~p12) & p13);                                                \
+    A22 = p12 ^ ((~p13) & p14);                                                \
+    A32 = p13 ^ ((~p14) & p10);                                                \
+    A42 = p14 ^ ((~p10) & p11);                                                \
+    A03 = p15 ^ ((~p16) & p17);                                                \
+    A13 = p16 ^ ((~p17) & p18);                                                \
+    A23 = p17 ^ ((~p18) & p19);                                                \
+    A33 = p18 ^ ((~p19) & p15);                                                \
+    A43 = p19 ^ ((~p15) & p16);                                                \
+    A04 = p20 ^ ((~p21) & p22);                                                \
+    A14 = p21 ^ ((~p22) & p23);                                                \
+    A24 = p22 ^ ((~p23) & p24);                                                \
+    A34 = p23 ^ ((~p24) & p20);                                                \
+    A44 = p24 ^ ((~p20) & p21);                                                \
+    A00 ^= (rc);                                                               \
+  } while (0)
+
 static void keccak_f(uint64_t *s) {
-  uint64_t bc[5], t, p[25];
-  for (int r = 0; r < ROUNDS; r++) {
-    bc[0] = s[0] ^ s[5] ^ s[10] ^ s[15] ^ s[20];
-    bc[1] = s[1] ^ s[6] ^ s[11] ^ s[16] ^ s[21];
-    bc[2] = s[2] ^ s[7] ^ s[12] ^ s[17] ^ s[22];
-    bc[3] = s[3] ^ s[8] ^ s[13] ^ s[18] ^ s[23];
-    bc[4] = s[4] ^ s[9] ^ s[14] ^ s[19] ^ s[24];
-
-    t = bc[4] ^ rotl64(bc[1], 1);
-    s[0] ^= t;
-    s[5] ^= t;
-    s[10] ^= t;
-    s[15] ^= t;
-    s[20] ^= t;
-    t = bc[0] ^ rotl64(bc[2], 1);
-    s[1] ^= t;
-    s[6] ^= t;
-    s[11] ^= t;
-    s[16] ^= t;
-    s[21] ^= t;
-    t = bc[1] ^ rotl64(bc[3], 1);
-    s[2] ^= t;
-    s[7] ^= t;
-    s[12] ^= t;
-    s[17] ^= t;
-    s[22] ^= t;
-    t = bc[2] ^ rotl64(bc[4], 1);
-    s[3] ^= t;
-    s[8] ^= t;
-    s[13] ^= t;
-    s[18] ^= t;
-    s[23] ^= t;
-    t = bc[3] ^ rotl64(bc[0], 1);
-    s[4] ^= t;
-    s[9] ^= t;
-    s[14] ^= t;
-    s[19] ^= t;
-    s[24] ^= t;
-
-    p[0] = s[0];
-    p[10] = rotl64(s[1], 1);
-    p[20] = rotl64(s[2], 62);
-    p[5] = rotl64(s[3], 28);
-    p[15] = rotl64(s[4], 27);
-    p[16] = rotl64(s[5], 36);
-    p[1] = rotl64(s[6], 44);
-    p[11] = rotl64(s[7], 6);
-    p[21] = rotl64(s[8], 55);
-    p[6] = rotl64(s[9], 20);
-    p[7] = rotl64(s[10], 3);
-    p[17] = rotl64(s[11], 10);
-    p[2] = rotl64(s[12], 43);
-    p[12] = rotl64(s[13], 25);
-    p[22] = rotl64(s[14], 39);
-    p[23] = rotl64(s[15], 41);
-    p[8] = rotl64(s[16], 45);
-    p[18] = rotl64(s[17], 15);
-    p[3] = rotl64(s[18], 21);
-    p[13] = rotl64(s[19], 8);
-    p[14] = rotl64(s[20], 18);
-    p[24] = rotl64(s[21], 2);
-    p[9] = rotl64(s[22], 61);
-    p[19] = rotl64(s[23], 56);
-    p[4] = rotl64(s[24], 14);
-
-    for (int y = 0; y < 25; y += 5) {
-      uint64_t a0 = p[y], a1 = p[y + 1], a2 = p[y + 2], a3 = p[y + 3],
-               a4 = p[y + 4];
-      s[y] = a0 ^ ((~a1) & a2);
-      s[y + 1] = a1 ^ ((~a2) & a3);
-      s[y + 2] = a2 ^ ((~a3) & a4);
-      s[y + 3] = a3 ^ ((~a4) & a0);
-      s[y + 4] = a4 ^ ((~a0) & a1);
-    }
-    s[0] ^= RC[r + 1];
-  }
+  uint64_t A00 = s[0], A10 = s[1], A20 = s[2], A30 = s[3], A40 = s[4];
+  uint64_t A01 = s[5], A11 = s[6], A21 = s[7], A31 = s[8], A41 = s[9];
+  uint64_t A02 = s[10], A12 = s[11], A22 = s[12], A32 = s[13], A42 = s[14];
+  uint64_t A03 = s[15], A13 = s[16], A23 = s[17], A33 = s[18], A43 = s[19];
+  uint64_t A04 = s[20], A14 = s[21], A24 = s[22], A34 = s[23], A44 = s[24];
+  KECCAK_ROUND(RC[1]);
+  KECCAK_ROUND(RC[2]);
+  KECCAK_ROUND(RC[3]);
+  KECCAK_ROUND(RC[4]);
+  KECCAK_ROUND(RC[5]);
+  KECCAK_ROUND(RC[6]);
+  KECCAK_ROUND(RC[7]);
+  KECCAK_ROUND(RC[8]);
+  KECCAK_ROUND(RC[9]);
+  KECCAK_ROUND(RC[10]);
+  KECCAK_ROUND(RC[11]);
+  KECCAK_ROUND(RC[12]);
+  KECCAK_ROUND(RC[13]);
+  KECCAK_ROUND(RC[14]);
+  KECCAK_ROUND(RC[15]);
+  KECCAK_ROUND(RC[16]);
+  KECCAK_ROUND(RC[17]);
+  KECCAK_ROUND(RC[18]);
+  KECCAK_ROUND(RC[19]);
+  KECCAK_ROUND(RC[20]);
+  KECCAK_ROUND(RC[21]);
+  KECCAK_ROUND(RC[22]);
+  KECCAK_ROUND(RC[23]);
+  s[0] = A00; s[1] = A10; s[2] = A20; s[3] = A30; s[4] = A40;
+  s[5] = A01; s[6] = A11; s[7] = A21; s[8] = A31; s[9] = A41;
+  s[10] = A02; s[11] = A12; s[12] = A22; s[13] = A32; s[14] = A42;
+  s[15] = A03; s[16] = A13; s[17] = A23; s[18] = A33; s[19] = A43;
+  s[20] = A04; s[21] = A14; s[22] = A24; s[23] = A34; s[24] = A44;
 }
 
 static void absorb_prefix(uint64_t st[25], const uint8_t *prefix, size_t len) {
@@ -207,14 +241,9 @@ static int check_counter(const uint64_t base[25], size_t off0,
   return 1;
 }
 
-typedef struct {
-  const uint64_t *base;
-  size_t off0;
-  const uint8_t *target;
-  uint64_t start;
-  uint64_t end;
-  uint64_t result;
-} WorkerArgs;
+static const uint64_t *g_base;
+static size_t g_off0;
+static const uint8_t *g_target;
 
 static long long now_ms(void) {
 #if defined(_WIN32)
@@ -233,42 +262,56 @@ static int budget_exhausted(void) {
   return now_ms() >= deadline;
 }
 
-static void run_worker(WorkerArgs *a) {
-  a->result = UINT64_MAX;
-  if (a->start >= a->end)
-    return;
+static void run_worker(void) {
   char digits[MAX_DIGITS + 1];
-  int dlen = to_digits(a->start, digits);
-  if (dlen < 0)
-    return;
-  uint64_t stride = 0;
-  for (uint64_t c = a->start; c < a->end; c++) {
+  for (;;) {
     if (atomic_load(&g_found))
       return;
-    if (++stride >= TIME_CHECK_STRIDE) {
-      stride = 0;
-      if (budget_exhausted()) {
+    uint64_t limit = atomic_load(&g_limit);
+    uint64_t start = atomic_fetch_add(&g_next, WORK_BLOCK);
+    if (start >= limit)
+      return;
+    uint64_t end = start + WORK_BLOCK;
+    if (end > limit)
+      end = limit;
+    int dlen = to_digits(start, digits);
+    if (dlen < 0)
+      continue;
+    uint64_t stride = 0;
+    for (uint64_t c = start; c < end; c++) {
+      if (atomic_load(&g_found))
+        return;
+      if (++stride >= TIME_CHECK_STRIDE) {
+        stride = 0;
+        if (budget_exhausted()) {
+          atomic_store(&g_found, 1);
+          return;
+        }
+      }
+      if (check_counter(g_base, g_off0, digits, dlen, g_target)) {
+        uint64_t cur = atomic_load(&g_best);
+        while (c < cur) {
+          if (atomic_compare_exchange_weak(&g_best, &cur, c))
+            break;
+        }
         atomic_store(&g_found, 1);
         return;
       }
+      inc_digits(digits, &dlen);
     }
-    if (check_counter(a->base, a->off0, digits, dlen, a->target)) {
-      a->result = c;
-      atomic_store(&g_found, 1);
-      return;
-    }
-    inc_digits(digits, &dlen);
   }
 }
 
 #if defined(_WIN32)
 static DWORD WINAPI worker(LPVOID arg) {
-  run_worker((WorkerArgs *)arg);
+  (void)arg;
+  run_worker();
   return 0;
 }
 #else
 static void *worker(void *arg) {
-  run_worker((WorkerArgs *)arg);
+  (void)arg;
+  run_worker();
   return NULL;
 }
 #endif
@@ -423,11 +466,6 @@ int main(void) {
   if (nthreads < 1)
     nthreads = 1;
 
-  WorkerArgs *args = (WorkerArgs *)calloc((size_t)nthreads, sizeof(WorkerArgs));
-  if (!args) {
-    puts("{\"error\":\"out of memory\"}");
-    return 1;
-  }
 #if defined(_WIN32)
   HANDLE *threads = (HANDLE *)calloc((size_t)nthreads, sizeof(HANDLE));
 #else
@@ -435,35 +473,33 @@ int main(void) {
 #endif
   unsigned char *created = (unsigned char *)calloc((size_t)nthreads, 1);
   if (!threads || !created) {
-    free(args);
     free(threads);
     free(created);
     puts("{\"error\":\"out of memory\"}");
     return 1;
   }
 
-  uint64_t chunk = (limit + (uint64_t)nthreads - 1) / (uint64_t)nthreads;
+  g_base = base;
+  g_off0 = off0;
+  g_target = target;
+  atomic_store(&g_limit, limit);
+  atomic_store(&g_next, 0);
+  atomic_store(&g_best, UINT64_MAX);
   atomic_store(&g_found, 0);
+
   for (int i = 0; i < nthreads; i++) {
-    args[i].base = base;
-    args[i].off0 = off0;
-    args[i].target = target;
-    args[i].start = (uint64_t)i * chunk;
-    uint64_t end = args[i].start + chunk;
-    args[i].end = end > limit ? limit : end;
-    args[i].result = UINT64_MAX;
     created[i] = 0;
 #if defined(_WIN32)
-    threads[i] = CreateThread(NULL, 0, worker, &args[i], 0, NULL);
+    threads[i] = CreateThread(NULL, 0, worker, NULL, 0, NULL);
     if (threads[i])
       created[i] = 1;
     else
-      run_worker(&args[i]);
+      run_worker();
 #else
-    if (!pthread_create(&threads[i], NULL, worker, &args[i]))
+    if (!pthread_create(&threads[i], NULL, worker, NULL))
       created[i] = 1;
     else
-      run_worker(&args[i]);
+      run_worker();
 #endif
   }
 
@@ -478,14 +514,10 @@ int main(void) {
 #endif
   }
 
-  uint64_t best = UINT64_MAX;
-  for (int i = 0; i < nthreads; i++)
-    if (args[i].result < best)
-      best = args[i].result;
+  uint64_t best = atomic_load(&g_best);
 
   free(threads);
   free(created);
-  free(args);
 
   if (best != UINT64_MAX) {
     printf("{\"answer\":%llu}\n", (unsigned long long)best);
