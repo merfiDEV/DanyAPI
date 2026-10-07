@@ -23,7 +23,7 @@ from ..opencode import api as opencode_api
 from ..qwen import api as qwen_api
 from .attachments import _collect_attachments, _validate_attachments
 from .byok import _byok_caller_id, _byok_pool_for, _extract_request_api_key
-from .core import MAX_CHAT_BODY_BYTES, _acquire_account
+from .core import ANON_SCOPE, MAX_CHAT_BODY_BYTES, _acquire_account
 from .deepseek import _collect_non_stream, _stream_openai
 from .images import _b64encode
 from .mcpagent import mcp_enabled, run_mcp_chat
@@ -415,7 +415,7 @@ def _request_scope(req: ChatCompletionRequest) -> str | None:
         return "u:" + hashlib.sha1(user.encode("utf-8", "replace"), usedforsecurity=False).hexdigest()[:16]
     if _byok_mode() and _caller_scope():
         return f"k:{_caller_scope()}"
-    return None
+    return ANON_SCOPE.get()
 
 
 async def _acquire_session_account(pool: AccountPool, req: Any) -> tuple[Any, str | None]:

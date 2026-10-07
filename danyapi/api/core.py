@@ -13,6 +13,7 @@ import uuid
 import weakref
 from collections.abc import Iterator
 from contextlib import asynccontextmanager
+from contextvars import ContextVar
 from pathlib import Path
 from typing import Any
 
@@ -697,6 +698,21 @@ def _request_client_ip(request: Request) -> str:
     return forwarded
 
 
+ANON_SCOPE_HEADER = "x-danyapi-client-id"
+ANON_SCOPE: ContextVar[str | None] = ContextVar("danyapi_anon_scope", default=None)
+
+
+def _anonymous_scope(request: Request) -> str:
+    header = request.headers.get(ANON_SCOPE_HEADER)
+    if header and header.strip():
+        seed = f"h:{header.strip()}"
+    else:
+        agent = request.headers.get("user-agent", "")
+        seed = f"{_request_client_ip(request)}\0{agent}"
+    digest = hashlib.sha256(seed.encode("utf-8", "replace"), usedforsecurity=False).hexdigest()[:16]
+    return f"a:{digest}"
+
+
 MAX_LOGGED_FIELD = 120
 _LOG_UNSAFE_RE = re.compile(r"[\x00-\x1f\x7f]")
 
@@ -773,6 +789,7 @@ def _log_request_success(request: Request, payload: dict[str, Any], duration: fl
 async def _log_requests(request: Request, call_next):
     started = time.monotonic()
     payload: dict[str, Any] = {}
+    ANON_SCOPE.set(_anonymous_scope(request))
     state = _install_body_limit(request)
     try:
         if _declared_body_length(request) > state.limit:

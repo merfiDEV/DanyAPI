@@ -3,6 +3,7 @@ import functools
 import inspect
 import json
 import logging
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -253,6 +254,33 @@ def test_request_scope_bounds_an_oversized_user():
     scope = chats_mod._request_scope(_chat(user="x" * (4 * 1024 * 1024)))
     assert scope is not None
     assert len(scope) == 18
+
+
+def test_request_scope_falls_back_to_the_anonymous_client_scope():
+    token = chats_mod.ANON_SCOPE.set("a:deadbeefdeadbeef")
+    try:
+        assert chats_mod._request_scope(_chat()) == "a:deadbeefdeadbeef"
+    finally:
+        chats_mod.ANON_SCOPE.reset(token)
+    assert chats_mod._request_scope(_chat()) is None
+
+
+def test_anonymous_scope_is_stable_and_distinguishes_clients():
+    from danyapi.api import core
+
+    def request(peer, agent, header=None):
+        headers = {"user-agent": agent} if agent is not None else {}
+        if header is not None:
+            headers[core.ANON_SCOPE_HEADER] = header
+        return SimpleNamespace(client=SimpleNamespace(host=peer), headers=headers)
+
+    first = core._anonymous_scope(request("10.0.0.1", "opencode/1.0"))
+    assert first == core._anonymous_scope(request("10.0.0.1", "opencode/1.0"))
+    assert first != core._anonymous_scope(request("10.0.0.2", "opencode/1.0"))
+    assert first != core._anonymous_scope(request("10.0.0.1", "opencode/2.0"))
+    pinned = core._anonymous_scope(request("10.0.0.1", "opencode/1.0", header="client-7"))
+    assert pinned == core._anonymous_scope(request("10.0.0.9", "other/9", header="client-7"))
+    assert pinned != first
 
 
 def test_context_sequence_digest_differs_between_scopes():
