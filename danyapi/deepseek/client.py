@@ -36,6 +36,11 @@ def new_device_id() -> str:
     return str(uuid.uuid4())
 
 
+def _transport_detail(exc: BaseException) -> str:
+    text = str(exc).strip()
+    return text or type(exc).__name__
+
+
 @dataclass
 class DeepSeekSession:
     id: str
@@ -84,7 +89,7 @@ class DeepSeekClient:
         try:
             resp = await send(path, **kwargs)
         except httpx.HTTPError as exc:
-            raise DeepSeekError(-1, f"http request failed: {exc}") from exc
+            raise DeepSeekError(-1, f"http request failed: {_transport_detail(exc)}") from exc
         try:
             resp.raise_for_status()
         except httpx.HTTPStatusError as exc:
@@ -135,7 +140,7 @@ class DeepSeekClient:
                 params={"did": self.device_id, "scope": SETTINGS_SCOPE_MODEL},
             )
         except httpx.HTTPError as exc:
-            raise DeepSeekError(-1, f"http request failed: {exc}") from exc
+            raise DeepSeekError(-1, f"http request failed: {_transport_detail(exc)}") from exc
         if resp.status_code != 200:
             raise DeepSeekError(resp.status_code, f"model settings returned {resp.status_code}")
         try:

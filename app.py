@@ -61,7 +61,7 @@ def _solver_is_current(bin_path: Path, src_path: Path) -> bool:
         return False
 
 
-def build_solver() -> None:
+def build_solver(force: bool = False) -> None:
     src_candidates = [
         ROOT / "pow_solver.c",
         ROOT / "danyapi" / "pow_solver.c",
@@ -86,7 +86,7 @@ def build_solver() -> None:
     bin_name = "pow_solver.exe" if is_win else "pow_solver"
     bin_path = src_path.parent / bin_name
 
-    if _solver_is_current(bin_path, src_path):
+    if not force and _solver_is_current(bin_path, src_path):
         return
 
     compilers = ["gcc", "clang", "cl"] if is_win else ["gcc", "clang", "cc"]
@@ -121,6 +121,10 @@ def build_solver() -> None:
             chosen_compiler,
             "-O3",
             "-march=native",
+            "-mtune=native",
+            "-funroll-loops",
+            "-flto",
+            "-fomit-frame-pointer",
             *(["-pthread"] if not is_win else []),
             str(src_path),
             "-o",
@@ -181,7 +185,7 @@ def main() -> None:
 
     ensure_env()
     try:
-        build_solver()
+        build_solver(force=True)
     except (OSError, subprocess.SubprocessError) as exc:
         print(f"Native pow_solver build skipped: {exc}", file=sys.stderr)
         print("The Python and Node fallbacks still solve challenges, just slower.", file=sys.stderr)

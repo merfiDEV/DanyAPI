@@ -185,7 +185,7 @@ async def _fetch_opencode_models(client: opencode_zen.OpenCodeClient) -> list[di
     try:
         catalog = await opencode_zen.fetch_catalog(client)
     except Exception as exc:
-        log.warning("opencode catalog fetch failed, falling back to the bare model list: %s", exc)
+        log.info("opencode catalog unavailable, using the bare model list: %s", exc)
 
     models: list[dict] = []
     skipped = 0

@@ -516,6 +516,7 @@ MAX_CHAT_BODY_BYTES = 3 * MAX_ATTACHMENT_TOTAL_SIZE
 CHAT_BODY_PATHS = frozenset({"/v1/chat/completions", "/v1/completions"})
 
 _BODY_LIMIT_SCOPE_KEY = "danyapi_body_limit"
+_BODY_JSON_SCOPE_KEY = "danyapi_body_json"
 
 
 class _BodyLimit:
@@ -627,6 +628,11 @@ def _parse_logged_body(body: bytes) -> dict[str, Any]:
 async def _extract_request_body(request: Request) -> dict[str, Any]:
     if getattr(request, "method", None) in ("GET", "DELETE", "HEAD", "OPTIONS"):
         return {}
+    scope = getattr(request, "scope", None)
+    if isinstance(scope, dict):
+        cached_json = scope.get(_BODY_JSON_SCOPE_KEY)
+        if cached_json is not None:
+            return cached_json
     state = _install_body_limit(request)
     raw_length = _declared_body_length(request)
     if raw_length > state.limit:
@@ -635,7 +641,10 @@ async def _extract_request_body(request: Request) -> dict[str, Any]:
         return {}
     cached = getattr(request, "_body", None)
     if cached:
-        return _parse_logged_body(cached)
+        payload = _parse_logged_body(cached)
+        if isinstance(scope, dict):
+            scope[_BODY_JSON_SCOPE_KEY] = payload
+        return payload
     try:
         body = await _read_request_body_detail(request, state)
     except HTTPException:
@@ -644,7 +653,10 @@ async def _extract_request_body(request: Request) -> dict[str, Any]:
         return {}
     if state.exceeded:
         raise HTTPException(413, state.detail)
-    return _parse_logged_body(body)
+    payload = _parse_logged_body(body)
+    if isinstance(scope, dict):
+        scope[_BODY_JSON_SCOPE_KEY] = payload
+    return payload
 
 
 LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1", "::ffff:127.0.0.1", "localhost"})
