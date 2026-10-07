@@ -117,14 +117,16 @@ def build_solver(force: bool = False) -> None:
         else:
             _report_compiler_failure(chosen_compiler, res)
     else:
+        fast_flags = ["-O3", "-march=native", "-mtune=native", "-funroll-loops"]
+        if chosen_compiler == "clang":
+            if shutil.which("lld") or shutil.which("ld.lld"):
+                fast_flags.extend(["-flto", "-fuse-ld=lld"])
+        else:
+            fast_flags.append("-flto")
+        fast_flags.append("-fomit-frame-pointer")
         cmd_fast = [
             chosen_compiler,
-            "-O3",
-            "-march=native",
-            "-mtune=native",
-            "-funroll-loops",
-            "-flto",
-            "-fomit-frame-pointer",
+            *fast_flags,
             *(["-pthread"] if not is_win else []),
             str(src_path),
             "-o",
