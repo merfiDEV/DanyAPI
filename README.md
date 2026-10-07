@@ -81,7 +81,7 @@ Credentials:
 | `DEEPSEEK_TOKENS` | empty | Comma-separated DeepSeek web tokens. Required unless another provider is used |
 | `QWEN_TOKENS` | empty | Comma-separated Qwen web tokens. Required unless another provider is used |
 | `GIGACHAT_KEYS` | empty | Comma-separated GigaChat authorization keys, base64 of `client_id:client_secret` from the GigaChat Studio account |
-| `GIGACHAT_SCOPE` | `GIGACHAT_API_PERS` | GigaChat scope: `GIGACHAT_API_PERS`, `GIGACHAT_API_B2B` or `GIGACHAT_API_CORP` |
+| `GIGACHAT_SCOPE` / `DANYAPI_GIGACHAT_SCOPE` | `GIGACHAT_API_PERS` | GigaChat scope: `GIGACHAT_API_PERS`, `GIGACHAT_API_B2B` or `GIGACHAT_API_CORP` |
 | `DANYAPI_GIGACHAT_CA_FILE` | empty | Path to a CA bundle for GigaChat, empty uses the bundled Russian root CA |
 | `OPENCODE_KEYS` | empty | Comma-separated OpenCode Zen API keys from `https://opencode.ai/auth` |
 | `OPENCODE_ENABLED` | empty | `1` serves the Zen free tier without a key, ignored once `OPENCODE_KEYS` is set |
@@ -267,7 +267,7 @@ Model lists are not hardcoded. Every provider is asked where it runs and the ans
 
 The lists are fetched at startup and refetched every `DANYAPI_MODELS_REFRESH_SECONDS`, and a fetch that fails or comes back empty keeps the last good list rather than emptying `GET /v1/models`. Send `?refresh=1` to `GET /v1/models`, or pass a key in `Authorization` or `x-api-key`, to force a refetch right now and, for GigaChat, to read the list your own key is granted.
 
-Only models the upstream marks enabled are listed, so a DeepSeek model type the account is not given does not appear. DeepSeek ids are its `model_type` values, `default` today, with a `-thinking` sibling for each that toggles reasoning; `deepseek-v4.1-flash` still resolves as an alias of the default one. In BYOK mode the keyless providers are catalogued from the same endpoints without any key, and GigaChat joins the list as soon as a request arrives with a key.
+Only models the upstream marks enabled are listed, so a DeepSeek model type the account is not given does not appear. DeepSeek's only upstream type today is `default`, served publicly as `deepseek-v4.1-flash`, with a `-thinking` sibling that toggles reasoning; the raw `default` id still resolves as an alias. In BYOK mode the keyless providers are catalogued from the same endpoints without any key, and GigaChat joins the list as soon as a request arrives with a key.
 
 OpenCode Zen is the one provider with two ways to name the same model. `GET /v1/models` returns the bare id, and a bare id is what routes, but an id that another provider also owns needs the `opencode/` prefix to say which one is meant.
 

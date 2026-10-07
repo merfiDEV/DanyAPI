@@ -29,6 +29,8 @@ SETTINGS_SCOPE_MODEL = "model"
 MODEL_CONFIGS_KEY = "model_configs"
 DEFAULT_MODEL_TYPE = "default"
 
+TRANSPORT_ERROR_CODE = -1
+
 
 def new_device_id() -> str:
     return str(uuid.uuid4())

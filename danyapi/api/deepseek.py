@@ -14,7 +14,7 @@ from fastapi import HTTPException
 from .. import tools as toolemu
 from ..accounts import AccountPool, DeepSeekAccount, account_lock
 from ..config import settings
-from ..deepseek.client import DeepSeekError, DeepSeekSession
+from ..deepseek.client import TRANSPORT_ERROR_CODE, DeepSeekError, DeepSeekSession
 from ..deepseek.stream import IncrementalSSE, MessageReconstructor
 from ..sseutil import StreamStopFilter, split_stop
 from ..tokens import StreamBudget, estimate_tokens, trim_to_tokens
@@ -97,11 +97,25 @@ async def _prepare_session(
     existing_sid: str | None,
     context_seq: tuple[str, ...] | None = None,
 ) -> tuple[DeepSeekSession, str, str | None]:
-    try:
-        session, session_key = await account.sessions.obtain(existing_sid)
-    except DeepSeekError as exc:
-        _handle_account_error(account, exc)
-        raise HTTPException(_deepseek_status(exc), _deepseek_error_detail(exc)) from exc
+    attempt = 0
+    while True:
+        try:
+            session, session_key = await account.sessions.obtain(existing_sid)
+        except DeepSeekError as exc:
+            if exc.biz_code == TRANSPORT_ERROR_CODE and attempt < MAX_RETRIES:
+                attempt += 1
+                delay = _retry_delay(attempt)
+                log.warning(
+                    "deepseek session create transport error, retry %d/%d in %.1fs",
+                    attempt,
+                    MAX_RETRIES,
+                    delay,
+                )
+                await asyncio.sleep(delay)
+                continue
+            _handle_account_error(account, exc)
+            raise HTTPException(_deepseek_status(exc), _deepseek_error_detail(exc)) from exc
+        break
     pool.register(account.index, session_key)
     if context_seq:
         pool.index_context(session_key, context_seq)

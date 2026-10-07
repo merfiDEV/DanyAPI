@@ -460,6 +460,15 @@ async def _acquire_and_build(
     return account, existing_sid, context_seq, prompt, tool_mode, cached_session
 
 
+def _reasoning_flag(req: ChatCompletionRequest) -> bool | None:
+    if req.thinking is not None:
+        return req.thinking
+    effort = getattr(req, "reasoning_effort", None)
+    if isinstance(effort, str) and effort.strip() and effort.strip().lower() != "none":
+        return True
+    return None
+
+
 async def _chat_completions_deepseek(req: ChatCompletionRequest, pool: AccountPool | None = None) -> Any:
     if pool is None:
         pool = getattr(app.state, "pool", None)
@@ -467,7 +476,8 @@ async def _chat_completions_deepseek(req: ChatCompletionRequest, pool: AccountPo
         raise HTTPException(503, "deepseek provider is not configured")
 
     model_type = _resolve_model(req.model)
-    thinking = req.thinking if req.thinking is not None else _is_reasoning_model(req.model)
+    reasoning = _reasoning_flag(req)
+    thinking = reasoning if reasoning is not None else _is_reasoning_model(req.model)
     search = bool(req.search)
 
     tools, tool_choice = _materialize_tools(req)
@@ -737,7 +747,7 @@ async def _chat_completions_duckai(req: ChatCompletionRequest, pool: AccountPool
         "tools": tools,
         "tool_choice": tool_choice,
         "functions": getattr(req, "functions", None),
-        "thinking": req.thinking,
+        "thinking": _reasoning_flag(req),
         "search": bool(req.search),
         "stop": getattr(req, "stop", None),
         "max_tokens": _max_tokens_of(req),

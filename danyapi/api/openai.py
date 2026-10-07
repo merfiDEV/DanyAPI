@@ -471,6 +471,15 @@ async def usage_stats(request: Request) -> dict:
     return {field: snapshot[field] for field in PUBLIC_USAGE_FIELDS if field in snapshot}
 
 
+def _responses_reasoning_effort(req: ResponsesRequest) -> str | None:
+    reasoning = req.reasoning
+    if isinstance(reasoning, dict):
+        effort = reasoning.get("effort")
+        if isinstance(effort, str) and effort.strip():
+            return effort.strip()
+    return None
+
+
 def _responses_chat_request(req: ResponsesRequest, provider_messages: list[dict], session_id: str | None) -> ChatCompletionRequest:
     return ChatCompletionRequest(
         model=req.model,
@@ -480,6 +489,7 @@ def _responses_chat_request(req: ResponsesRequest, provider_messages: list[dict]
         top_p=req.top_p,
         thinking=req.thinking,
         search=req.search,
+        reasoning_effort=_responses_reasoning_effort(req),
         session_id=session_id,
         user=req.user,
         tools=responses_api.convert_tools(req.tools),

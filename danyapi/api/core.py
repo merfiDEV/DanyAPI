@@ -120,6 +120,23 @@ def _flush_state_stores() -> None:
             log.debug("pool flush failed: %s", exc)
 
 
+def _warm_pow_headers(accts: list[Any]) -> None:
+    seen: set[int] = set()
+    for acct in accts:
+        if id(acct) in seen:
+            continue
+        seen.add(id(acct))
+        pow_manager = getattr(acct, "pow", None)
+        create = getattr(getattr(acct, "client", None), "create_pow_challenge", None)
+        warm = getattr(pow_manager, "warm", None)
+        if warm is None or create is None:
+            continue
+        try:
+            warm(create)
+        except Exception as exc:
+            log.debug("pow warm-up failed for %s: %s", getattr(acct, "label", acct), exc)
+
+
 def _close_pow_managers(accts: list[Any]) -> None:
     seen: set[int] = set()
     for acct in accts:
@@ -404,6 +421,7 @@ async def lifespan(app: FastAPI):
                 "no valid credentials: set DEEPSEEK_TOKENS, QWEN_TOKENS, GIGACHAT_KEYS, OPENCODE_KEYS, "
                 "ALICE_ENABLED=1, OPENCODE_ENABLED=1, DUCKAI_ENABLED=1, MISTRAL_ENABLED=1 or AISTUDIO_ENABLED=1"
             )
+        _warm_pow_headers(accounts)
         await refresh_models()
         mcp_registry = McpRegistry()
         if settings.mcp_search_enabled:

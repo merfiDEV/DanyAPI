@@ -177,7 +177,7 @@ async def test_deepseek_fetch_models_maps_upstream_types():
     client = MagicMock()
     client.fetch_models = AsyncMock(return_value=DEEPSEEK_RAW)
     models = await openai_mod._fetch_deepseek_models(client)
-    assert [model["id"] for model in models] == ["default", "expert"]
+    assert [model["id"] for model in models] == ["deepseek-v4.1-flash", "expert"]
     assert models[0]["upstream_type"] == "default"
     assert models[0]["model_type"] == "chat"
     assert models[0]["is_default"] is True

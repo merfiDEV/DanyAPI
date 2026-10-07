@@ -545,6 +545,9 @@ class PowManager:
                 current.exception()
         self._refill = asyncio.create_task(self._refill_if_empty(fetch))
 
+    def warm(self, fetch) -> None:
+        self._kick_refill(fetch)
+
     def close(self) -> None:
         for name in ("_refill", "_building"):
             current: asyncio.Task | None = getattr(self, name)

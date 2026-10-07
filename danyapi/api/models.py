@@ -46,7 +46,9 @@ GIGACHAT_CHAT_TYPES = frozenset({"chat"})
 
 REASONING_SUFFIXES = ("-thinking",)
 
-DEEPSEEK_LEGACY_ALIASES = frozenset({"deepseek-v4.1-flash"})
+DEEPSEEK_LEGACY_ALIASES = frozenset({"deepseek-v4.1-flash", "default"})
+
+DEEPSEEK_PUBLIC_IDS = {"default": "deepseek-v4.1-flash"}
 
 _MODEL_CACHE: dict[str, Any] = {
     "key": None,
@@ -111,7 +113,7 @@ async def _fetch_deepseek_models(client: DeepSeekClient) -> list[dict]:
             continue
         models.append(
             {
-                "id": model_id,
+                "id": DEEPSEEK_PUBLIC_IDS.get(model_id, model_id),
                 "name": entry.get("name") or model_id,
                 "owned_by": "deepseek",
                 "model_type": "chat",

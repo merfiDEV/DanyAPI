@@ -80,7 +80,7 @@ async def test_fetch_deepseek_models_skips_entries_without_a_string_id():
     models = await models_mod._fetch_deepseek_models(client)
     assert models == [
         {
-            "id": "default",
+            "id": "deepseek-v4.1-flash",
             "name": "Instant",
             "owned_by": "deepseek",
             "model_type": "chat",

@@ -58,6 +58,7 @@ class ChatCompletionRequest(BaseModel):
     top_p: float | None = None
     thinking: bool | None = None
     search: bool | None = None
+    reasoning_effort: str | None = None
     mcp: bool | None = None
     session_id: str | None = None
     user: str | None = None
