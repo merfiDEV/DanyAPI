@@ -18,6 +18,11 @@ for _key in (
     "ALICE_ACCOUNTS",
     "DUCKAI_ENABLED",
     "DUCKAI_ACCOUNTS",
+    "MISTRAL_ENABLED",
+    "MISTRAL_LOGINS",
+    "AISTUDIO_ENABLED",
+    "AISTUDIO_LOGINS",
+    "DANYAPI_DISABLED_PROVIDERS",
 ):
     os.environ[_key] = ""
 
