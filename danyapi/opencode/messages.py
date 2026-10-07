@@ -213,7 +213,7 @@ def _token_count(value: Any) -> int:
     if isinstance(value, str):
         try:
             number = int(float(value.strip()))
-        except ValueError:
+        except (ValueError, OverflowError):
             return 0
         return max(0, number)
     return 0
