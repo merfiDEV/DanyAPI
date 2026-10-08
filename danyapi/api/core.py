@@ -1034,7 +1034,7 @@ QWEN_ONLY_PATH_PREFIXES = ("/v1/images/", "/v1/videos/")
 
 DASHBOARD_CSP = (
     "default-src 'none'; "
-    "script-src 'sha256-Xr6xa28cznRbPXyYX0ViV8j9+yb4A3F6MPlG8BqGTN0='; "
+    "script-src 'sha256-WEbzZWjwNTkg/s8+3X2rF8zl2ITF3sYuCxaOSW4IgLM='; "
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
     "font-src 'self' https://fonts.gstatic.com data:; "
     "img-src 'self' data:; "
