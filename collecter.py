@@ -7,7 +7,19 @@ import tempfile
 
 ROOT = pathlib.Path(__file__).resolve().parent
 
-XML_ILLEGAL_RE = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x84\x86-\x9f\ufdd0-\ufddf\ufffe\uffff]")
+_XML_ILLEGAL_CODEPOINTS = (
+    *range(0x00, 0x09),
+    0x0B,
+    0x0C,
+    *range(0x0E, 0x20),
+    *range(0x7F, 0x85),
+    *range(0x86, 0xA0),
+    *range(0xFDD0, 0xFDE0),
+    0xFFFE,
+    0xFFFF,
+)
+
+XML_ILLEGAL_RE = re.compile("[" + "".join(chr(cp) for cp in _XML_ILLEGAL_CODEPOINTS) + "]")
 
 
 def xml_escape(text):
