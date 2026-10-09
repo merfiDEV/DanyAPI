@@ -295,15 +295,16 @@ def test_registries_all_carry_the_provider():
     assert POOL_ATTRS_BY_PROVIDER["opencode"] == "opencode_pool"
 
 
-def test_the_provider_is_off_until_a_key_or_the_flag_is_given():
+def test_the_provider_is_enabled_by_default_and_disabled_via_env():
     from danyapi.config import Settings
 
-    saved = {name: os.environ.pop(name, None) for name in ("OPENCODE_KEYS", "OPENCODE_ENABLED")}
+    saved = {name: os.environ.pop(name, None) for name in ("OPENCODE_KEYS", "DANYAPI_DISABLED_PROVIDERS")}
     try:
-        assert Settings().opencode_keys == []
-        assert Settings().opencode_enabled is False
-        os.environ["OPENCODE_ENABLED"] = "1"
-        assert Settings().opencode_enabled is True
+        s = Settings()
+        assert s.opencode_keys == []
+        assert s.provider_enabled("opencode") is True
+        os.environ["DANYAPI_DISABLED_PROVIDERS"] = "opencode"
+        assert Settings().provider_enabled("opencode") is False
         os.environ["OPENCODE_KEYS"] = "k1,k2"
         assert Settings().opencode_keys == ["k1", "k2"]
     finally:

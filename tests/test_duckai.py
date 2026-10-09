@@ -144,7 +144,7 @@ def test_models_endpoint_includes_duckai():
 def test_chat_completions_503_when_duckai_not_configured():
     resp = _post({"model": MODEL, "messages": [{"role": "user", "content": "hi"}]})
     assert resp.status_code == 503
-    assert "DUCKAI_ENABLED" in resp.json()["error"]["message"]
+    assert "not configured" in resp.json()["error"]["message"]
 
 
 def test_pool_with_only_blocked_account_returns_429():

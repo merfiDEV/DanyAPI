@@ -88,7 +88,7 @@ def test_chat_completions_503_when_alice_not_configured():
         json={"model": "alice", "messages": [{"role": "user", "content": "hi"}]},
     )
     assert resp.status_code == 503
-    assert "ALICE_ENABLED" in resp.json()["error"]["message"]
+    assert "not configured" in resp.json()["error"]["message"]
 
 
 class _AliceStub(AliceClient):

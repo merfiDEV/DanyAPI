@@ -102,7 +102,7 @@ jobs:
           tag="$(printf '%s\n' "$TAGS" | head -n1)"
           name="$SMOKE_NAME"
           docker run -d --name "$name" -p 8000:8000 \
-            -e BYOK_MODE=1 \
+            -e BYOK=1 \
             -e DANYAPI_LOG_LEVEL=INFO \
             "$tag"
           trap 'docker logs "$name" || true; docker rm -f "$name" || true' EXIT

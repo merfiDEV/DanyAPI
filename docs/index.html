@@ -216,7 +216,7 @@
                     <li><code>alice-ai</code> <span class="model-chip" data-i18n="models_al_keyless">no key needed</span></li>
                     <li><code>yagpt</code> <span class="model-chip" data-i18n="models_al_keyless">no key needed</span></li>
                 </ul>
-                <p class="model-note" data-i18n="models_al_note">Unofficial, opt-in via <code>ALICE_ENABLED=1</code>, off by default. Yandex has no public API here, so it uses an undocumented internal protocol that can break at any time. Stateless and no incremental text, so history is folded into one prompt. At least one message is required, tool calls are not supported, and <code>max_tokens</code> trims the answer.</p>
+                <p class="model-note" data-i18n="models_al_note">Unofficial, enabled by default. Disable via <code>DANYAPI_DISABLED_PROVIDERS=alice</code>. Yandex has no public API here, so it uses an undocumented internal protocol that can break at any time. Stateless and no incremental text, so history is folded into one prompt. At least one message is required, tool calls are not supported, and <code>max_tokens</code> trims the answer.</p>
             </article>
 
             <article class="model-card reveal model-duck">
@@ -232,7 +232,7 @@
                     <li><code>claude-haiku-4-5</code> <span class="model-chip" data-i18n="models_duck_keyless">no key needed</span></li>
                     <li><code>mistral-small-2603</code>, <code>tinfoil/gemma4-31b</code>, <code>tinfoil/gpt-oss-120b</code></li>
                 </ul>
-                <p class="model-note" data-i18n="models_duck_note">Unofficial, opt-in via <code>DUCKAI_ENABLED=1</code>, off by default. DuckDuckGo has no public API here, so it uses an undocumented internal protocol and a browser fingerprint attestation that can break at any time. Needs Node.js on the host. Refuses datacenter addresses outright, so run it from a residential or mobile line.</p>
+                <p class="model-note" data-i18n="models_duck_note">Unofficial, enabled by default. Disable via <code>DANYAPI_DISABLED_PROVIDERS=duckai</code>. DuckDuckGo has no public API here, so it uses an undocumented internal protocol and a browser fingerprint attestation that can break at any time. Needs Node.js on the host. Refuses datacenter addresses outright, so run it from a residential or mobile line.</p>
             </article>
 
             <article class="model-card reveal model-mistral">
@@ -247,7 +247,7 @@
                     <li><code>mistral-medium-latest</code></li>
                     <li><code>mistral-large-latest</code>, <code>magistral-medium-latest</code>, <code>codestral-latest</code>, <code>mistral-ocr-latest</code></li>
                 </ul>
-                <p class="model-note" data-i18n="models_mistral_note">Unofficial, opt-in via <code>MISTRAL_ENABLED=1</code> plus <code>MISTRAL_LOGINS</code> with <code>email:password</code> pairs, off by default. Mistral has no public API here, so the provider speaks the Le Chat mobile flow with an account session. Free accounts are rate limited per message count. Can break at any time.</p>
+                <p class="model-note" data-i18n="models_mistral_note">Unofficial, enabled by default once <code>MISTRAL_LOGINS</code> with <code>email:password</code> pairs is set. Disable via <code>DANYAPI_DISABLED_PROVIDERS=mistral</code>. Mistral has no public API here, so the provider speaks the Le Chat mobile flow with an account session. Free accounts are rate limited per message count. Can break at any time.</p>
             </article>
         </div>
     </section>
@@ -287,8 +287,6 @@
   -e QWEN_TOKENS="token3" \
   -e GIGACHAT_KEYS="<authorization_key>" \
   -e OPENCODE_KEYS="<zen_api_key>" \
-  -e ALICE_ENABLED=1 \
-  -e DUCKAI_ENABLED=1 \
   ghcr.io/fanatfanata/danyapi:latest' data-i18n="copy">Copy</button>
                 </div>
                 <pre><code>docker run -d -p <span class="c-num">8000</span>:<span class="c-num">8000</span> \
@@ -296,8 +294,6 @@
   -e QWEN_TOKENS=<span class="c-str">"token3"</span> \
   -e GIGACHAT_KEYS=<span class="c-str">"&lt;authorization_key&gt;"</span> \
   -e OPENCODE_KEYS=<span class="c-str">"&lt;zen_api_key&gt;"</span> \
-  -e ALICE_ENABLED=<span class="c-num">1</span> \
-  -e DUCKAI_ENABLED=<span class="c-num">1</span> \
   ghcr.io/fanatfanata/danyapi:latest</code></pre>
                 <p class="pane-note" data-i18n="qs_docker_note">Prebuilt image, pushed on every push to prod and dev plus every version tag. The native PoW solver is compiled into the image for maximum speed.</p>
             </div>

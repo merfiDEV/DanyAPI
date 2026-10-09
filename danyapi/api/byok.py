@@ -16,6 +16,9 @@ from typing import Any
 from fastapi import HTTPException, Request
 
 from ..accounts import AccountPool, DeepSeekAccount
+from ..aihorde.accounts import AIHordeAccount
+from ..aihorde.client import ANON_KEY as AIHORDE_ANON_KEY
+from ..aihorde.client import AIHordeClient
 from ..aistudio.accounts import AistudioAccount, AistudioClient
 from ..aistudio.browser import StudioBrowser
 from ..aistudio.client import AistudioTransport
@@ -544,6 +547,13 @@ async def _build_byok_pool(provider: str, tokens: list[str], scope: str | None) 
         pool = AccountPool(accounts, label="aistudio")
         await refresh_provider_models("aistudio", accounts[0].client)
         return pool, created
+    if provider == "aihorde":
+        accounts = await _byok_aihorde_accounts(tokens, "byok")
+        if not accounts:
+            raise _no_valid_key(provider, _auth_indeterminate_count() - before)
+        pool = AccountPool(accounts, label="aihorde")
+        await refresh_provider_models("aihorde", accounts[0].client)
+        return pool, created
     raise HTTPException(400, f"provider {provider} does not accept a caller supplied api key")
 
 
@@ -747,6 +757,17 @@ async def _byok_aistudio_accounts(tokens: list[str], log_prefix: str) -> list[Ai
             continue
         accounts.append(AistudioAccount(len(accounts), token, browser, transport, stable_id=_byok_stable_id(token)))
     return accounts
+
+
+async def _byok_aihorde_accounts(tokens: list[str], log_prefix: str) -> list[AIHordeAccount]:
+    log.debug("%s aihorde key set received with %d key(s)", log_prefix, len(tokens))
+    effective = tokens or [AIHORDE_ANON_KEY]
+    return await _build_accounts(
+        "aihorde",
+        effective,
+        lambda key: AIHordeClient(api_key=key, timeout=settings.timeout),
+        lambda index, client, key: AIHordeAccount(index, client, stable_id=_byok_stable_id(key)),
+    )
 
 
 async def _register_keyless_pool(provider: str, pool: AccountPool) -> None:

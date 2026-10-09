@@ -25,6 +25,9 @@ from fastapi.staticfiles import StaticFiles
 from starlette.types import Scope
 
 from ..accounts import AccountPool, AccountPoolBusy, DeepSeekAccount
+from ..aihorde.accounts import AIHordeAccount
+from ..aihorde.client import ANON_KEY as AIHORDE_ANON_KEY
+from ..aihorde.client import AIHordeClient
 from ..aistudio.accounts import AistudioAccount, AistudioClient
 from ..aistudio.browser import StudioBrowser
 from ..aistudio.client import AistudioTransport
@@ -164,6 +167,7 @@ async def lifespan(app: FastAPI):
     duckai_accounts: list[DuckAIAccount] = []
     mistral_accounts: list[MistralChatAccount] = []
     aistudio_accounts: list[AistudioAccount] = []
+    aihorde_accounts: list[AIHordeAccount] = []
     byok_mode = settings.byok
     app.state.byok = byok_mode
     app.state.byok_pools = _blank_byok_state()
@@ -209,20 +213,25 @@ async def lifespan(app: FastAPI):
             oc_clients: list[OpenCodeClient] = []
             if settings.provider_enabled("opencode"):
                 oc_clients = [OpenCodeClient(key=key, timeout=settings.timeout) for key in settings.opencode_keys]
-                if not oc_clients and settings.opencode_enabled:
+                if not oc_clients:
                     oc_clients.append(OpenCodeClient(timeout=settings.timeout))
             alice_clients: list[AliceClient] = []
-            if settings.alice_enabled and settings.provider_enabled("alice"):
+            if settings.provider_enabled("alice"):
                 for _ in range(settings.alice_accounts):
                     alice_clients.append(AliceClient(timeout=settings.timeout))
             duckai_clients: list[DuckAIClient] = []
-            if settings.duckai_enabled and settings.provider_enabled("duckai"):
+            if settings.provider_enabled("duckai"):
                 for _ in range(settings.duckai_accounts):
                     duckai_clients.append(DuckAIClient(timeout=settings.timeout))
             mistral_clients: list[MistralChatClient] = []
-            if settings.mistral_enabled and settings.provider_enabled("mistral") and settings.mistral_logins:
+            if settings.provider_enabled("mistral") and settings.mistral_logins:
                 for login in settings.mistral_logins:
                     mistral_clients.append(MistralChatClient(timeout=settings.timeout, login=login))
+            aihorde_clients: list[AIHordeClient] = []
+            if settings.provider_enabled("aihorde"):
+                keys = settings.aihorde_api_keys or [AIHORDE_ANON_KEY]
+                for key in keys:
+                    aihorde_clients.append(AIHordeClient(api_key=key, timeout=settings.timeout))
             ds_checks = [client.check_auth() for client in ds_clients]
             qw_checks = [client.check_auth() for client in qw_clients]
             gc_checks = [client.check_auth() for client in gc_clients]
@@ -230,6 +239,7 @@ async def lifespan(app: FastAPI):
             alice_checks = [client.check_auth() for client in alice_clients]
             duckai_checks = [client.check_auth() for client in duckai_clients]
             mistral_checks = [client.check_auth() for client in mistral_clients]
+            aihorde_checks = [client.check_auth() for client in aihorde_clients]
             groups = (
                 ("deepseek", ds_checks),
                 ("qwen", qw_checks),
@@ -238,6 +248,7 @@ async def lifespan(app: FastAPI):
                 ("alice", alice_checks),
                 ("duckai", duckai_checks),
                 ("mistral", mistral_checks),
+                ("aihorde", aihorde_checks),
             )
             pending = [check for _name, checks in groups for check in checks]
             auth_by_provider: dict[str, list[bool]] = {name: [] for name, _checks in groups}
@@ -257,6 +268,7 @@ async def lifespan(app: FastAPI):
             alice_auth = auth_by_provider["alice"]
             duckai_auth = auth_by_provider["duckai"]
             mistral_auth = auth_by_provider["mistral"]
+            aihorde_auth = auth_by_provider["aihorde"]
             if ds_tokens:
                 for i, (token, ds_client, ok) in enumerate(zip(ds_tokens, ds_clients, ds_auth, strict=True)):
                     if not ok:
@@ -336,7 +348,17 @@ async def lifespan(app: FastAPI):
                 mistral_accounts.append(MistralChatAccount(len(mistral_accounts), mistral_client, stable_id="mistral"))
             if mistral_clients:
                 log.info("mistral accounts ready: %d", len(mistral_accounts))
-            if settings.aistudio_enabled and settings.provider_enabled("aistudio") and settings.aistudio_logins:
+            aihorde_keys = settings.aihorde_api_keys or [AIHORDE_ANON_KEY]
+            for i, (ah_client, ok) in enumerate(zip(aihorde_clients, aihorde_auth, strict=False)):
+                if not ok:
+                    log.warning("aihorde api key #%d could not reach the horde, skipping", i)
+                    await ah_client.aclose()
+                    continue
+                stable_id = _token_stable_id(aihorde_keys[i]) if i < len(aihorde_keys) else "aihorde"
+                aihorde_accounts.append(AIHordeAccount(len(aihorde_accounts), ah_client, stable_id=stable_id))
+            if aihorde_accounts:
+                log.info("aihorde accounts ready: %d", len(aihorde_accounts))
+            if settings.provider_enabled("aistudio") and settings.aistudio_logins:
                 for login in settings.aistudio_logins:
                     browser = StudioBrowser(
                         login=login,
@@ -407,6 +429,10 @@ async def lifespan(app: FastAPI):
             app.state.aistudio_pool = AccountPool(aistudio_accounts, label="aistudio")
         else:
             app.state.aistudio_pool = None
+        if aihorde_accounts:
+            app.state.aihorde_pool = AccountPool(aihorde_accounts, label="aihorde")
+        else:
+            app.state.aihorde_pool = None
         if (
             not accounts
             and not qwen_accounts
@@ -416,11 +442,12 @@ async def lifespan(app: FastAPI):
             and not duckai_accounts
             and not mistral_accounts
             and not aistudio_accounts
+            and not aihorde_accounts
             and not byok_mode
         ):
             raise RuntimeError(
                 "no valid credentials: set DEEPSEEK_TOKENS, QWEN_TOKENS, GIGACHAT_KEYS, OPENCODE_KEYS, "
-                "ALICE_ENABLED=1, OPENCODE_ENABLED=1, DUCKAI_ENABLED=1, MISTRAL_ENABLED=1 or AISTUDIO_ENABLED=1"
+                "MISTRAL_LOGINS or AISTUDIO_LOGINS, or disable unused providers via DANYAPI_DISABLED_PROVIDERS"
             )
         _warm_pow_headers(accounts)
         await refresh_models()
@@ -450,6 +477,7 @@ async def lifespan(app: FastAPI):
             *duckai_accounts,
             *mistral_accounts,
             *aistudio_accounts,
+            *aihorde_accounts,
         ]
         for pool_obj in _iter_pools():
             all_accounts.extend(pool_obj.accounts)

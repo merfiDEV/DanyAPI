@@ -189,6 +189,7 @@ def _patch_creds(ds_tokens=None, qwen_tokens=None, cache=True):
         patch.object(QC, "fetch_models", new=AsyncMock(return_value=[{"id": "m1", "info": {"meta": {"chat_type": ["t2t"]}}}])),
         patch.object(DSC, "aclose", new=AsyncMock()),
         patch.object(QC, "aclose", new=AsyncMock()),
+        patch.object(settings, "disabled_providers", frozenset({"opencode", "alice", "duckai", "aihorde"})),
     ):
         stack.enter_context(patch_cm)
     return stack
@@ -1813,6 +1814,7 @@ def test_lifespan_qwen_invalid_skipped():
     with (
         patch.object(settings, "deepseek_tokens", []),
         patch.object(settings, "qwen_tokens", ["bad"]),
+        patch.object(settings, "disabled_providers", frozenset({"opencode", "alice", "duckai", "aihorde"})),
         patch.object(QC, "check_auth", new=AsyncMock(return_value=False)),
     ):
         with pytest.raises(RuntimeError):

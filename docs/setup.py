@@ -65,13 +65,8 @@ GROUPS = [
         "BYOK",
         [
             (
-                "BYOK_MODE",
+                "BYOK",
                 "Bring your own key mode, every caller sends its own tokens (1/0)",
-                "flag",
-            ),
-            (
-                "DANYAPI_BYOK_MODE",
-                "Alias of BYOK_MODE, used only when BYOK_MODE is empty (1/0)",
                 "flag",
             ),
             (
@@ -635,57 +630,7 @@ def collect_opencode(current, defaults):
         current.get("OPENCODE_KEYS", ""),
         defaults.get("OPENCODE_KEYS", ""),
     )
-    values = {"OPENCODE_KEYS": keys}
-    if not keys.strip():
-        print("  No key given: the Zen free tier can still be served, without any key.")
-        enabled = read_value(
-            "  Serve the Zen free tier anyway? yes/no [" + (current.get("OPENCODE_ENABLED", "") or "no") + "]: ",
-            current.get("OPENCODE_ENABLED", ""),
-            defaults.get("OPENCODE_ENABLED", ""),
-        )
-        if enabled.strip().lower() in ("n", "no", "off", "0", "false", "нет"):
-            enabled = ""
-        elif enabled.strip():
-            enabled = "1"
-        values["OPENCODE_ENABLED"] = enabled
-    else:
-        values["OPENCODE_ENABLED"] = current.get("OPENCODE_ENABLED", "") or defaults.get("OPENCODE_ENABLED", "")
-    return values
-
-
-def collect_alice(current, defaults):
-    print()
-    print("[ Yandex Alice, unofficial ]")
-    print("  Free and keyless, but it speaks an undocumented internal protocol of a consumer service.")
-    print("  Yandex's terms forbid that, and the protocol can change without notice. See the README.")
-    enabled = read_value(
-        "  Enable the unofficial Alice provider? yes/no [" + (current.get("ALICE_ENABLED", "") or "no") + "]: ",
-        current.get("ALICE_ENABLED", ""),
-        defaults.get("ALICE_ENABLED", ""),
-    )
-    if enabled.strip().lower() in ("n", "no", "off", "0", "false", "нет"):
-        enabled = ""
-    elif enabled.strip():
-        enabled = "1"
-    return {"ALICE_ENABLED": enabled}
-
-
-def collect_duckai(current, defaults):
-    print()
-    print("[ Duck.ai, unofficial ]")
-    print("  Free and keyless, but it speaks an undocumented internal protocol of a consumer service")
-    print("  and proves a browser fingerprint. DuckDuckGo's terms forbid that, and it refuses")
-    print("  datacenter addresses outright. Needs Node.js on the host. See the README.")
-    enabled = read_value(
-        "  Enable the unofficial Duck.ai provider? yes/no [" + (current.get("DUCKAI_ENABLED", "") or "no") + "]: ",
-        current.get("DUCKAI_ENABLED", ""),
-        defaults.get("DUCKAI_ENABLED", ""),
-    )
-    if enabled.strip().lower() in ("n", "no", "off", "0", "false", "нет"):
-        enabled = ""
-    elif enabled.strip():
-        enabled = "1"
-    return {"DUCKAI_ENABLED": enabled}
+    return {"OPENCODE_KEYS": keys}
 
 
 def validate_provider(name, creds, defaults):
@@ -876,14 +821,10 @@ def main():
     qwen = validate_provider("Qwen", collect_provider("Qwen", current, defaults), defaults)
     gigachat = validate_gigachat(collect_gigachat(current, defaults), defaults)
     opencode = collect_opencode(current, defaults)
-    alice = collect_alice(current, defaults)
-    duckai = collect_duckai(current, defaults)
     values.update(deepseek)
     values.update(qwen)
     values.update(gigachat)
     values.update(opencode)
-    values.update(alice)
-    values.update(duckai)
 
     print()
     print("Now the rest of the settings. Enter to keep the current value, !clear to erase, !reset to restore the default.")
@@ -902,13 +843,11 @@ def main():
     has_qwen = any(v for v in qwen.values() if v)
     has_gigachat = any(v for v in gigachat.values() if v)
     has_opencode = any(v for v in opencode.values() if v)
-    has_alice = any(v for v in alice.values() if v)
-    has_duckai = any(v for v in duckai.values() if v)
-    if not (has_ds or has_qwen or has_gigachat or has_opencode or has_alice or has_duckai):
+    if not (has_ds or has_qwen or has_gigachat or has_opencode):
         print("Warning: no provider credentials configured.")
         print(
-            "The server will not start until you add DEEPSEEK_TOKENS, QWEN_TOKENS, GIGACHAT_KEYS, OPENCODE_KEYS,"
-            " ALICE_ENABLED=1, OPENCODE_ENABLED=1 or DUCKAI_ENABLED=1."
+            "The server will start with the keyless providers (Alice, Duck.ai) only."
+            " Add DEEPSEEK_TOKENS, QWEN_TOKENS, GIGACHAT_KEYS or OPENCODE_KEYS for more."
         )
 
     if ask("Create a DanyAPI launcher shortcut on the desktop?", True):

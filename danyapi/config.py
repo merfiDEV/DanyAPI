@@ -30,26 +30,19 @@ CREDENTIAL_ENV_NAMES = (
     "QWEN_TOKENS",
     "GIGACHAT_KEYS",
     "GIGACHAT_SCOPE",
-    "DANYAPI_GIGACHAT_SCOPE",
     "OPENCODE_KEYS",
     "MISTRAL_LOGINS",
     "AISTUDIO_LOGINS",
+    "AIHORDE_API_KEYS",
     "BYOK",
-    "BYOK_MODE",
-    "DANYAPI_BYOK_MODE",
     "DANYAPI_ADMIN_TOKEN",
 )
 _NON_CREDENTIAL_ENV_NAMES = frozenset(
     {
         "DANYAPI_HOST",
         "DANYAPI_PORT",
-        "ALICE_ENABLED",
         "ALICE_ACCOUNTS",
-        "OPENCODE_ENABLED",
-        "DUCKAI_ENABLED",
         "DUCKAI_ACCOUNTS",
-        "MISTRAL_ENABLED",
-        "AISTUDIO_ENABLED",
         "AISTUDIO_HEADLESS",
         "AISTUDIO_STATE_DIR",
         "AISTUDIO_DOH_URL",
@@ -77,7 +70,7 @@ _NON_CREDENTIAL_ENV_NAMES = frozenset(
     }
 )
 
-PROVIDER_NAMES = ("deepseek", "qwen", "gigachat", "opencode", "alice", "duckai", "mistral", "aistudio")
+PROVIDER_NAMES = ("deepseek", "qwen", "gigachat", "opencode", "alice", "duckai", "mistral", "aistudio", "aihorde")
 _ENV_NAME_RE = re.compile(r"_env_(?:int|float|positive_float|float_opt|str|list|on|off|first)\(\s*\"([A-Za-z0-9_]+)\"")
 
 
@@ -215,14 +208,6 @@ def _env_off(key: str, default: str) -> bool:
     return os.environ.get(key, default).strip().lower() in _FALSE_VALUES
 
 
-def _env_first(*keys: str) -> str:
-    for key in keys:
-        value = os.environ.get(key)
-        if value:
-            return value
-    return ""
-
-
 class Settings:
     def __init__(self) -> None:
         self.host = _env_str("DANYAPI_HOST", "0.0.0.0")
@@ -230,21 +215,17 @@ class Settings:
         self.deepseek_tokens = _env_list("DEEPSEEK_TOKENS")
         self.qwen_tokens = _env_list("QWEN_TOKENS")
         self.gigachat_keys = _env_list("GIGACHAT_KEYS")
-        self.gigachat_scope = _env_first("GIGACHAT_SCOPE", "DANYAPI_GIGACHAT_SCOPE").strip() or "GIGACHAT_API_PERS"
+        self.gigachat_scope = _env_str("GIGACHAT_SCOPE", "GIGACHAT_API_PERS")
         self.opencode_keys = _env_list("OPENCODE_KEYS")
-        self.opencode_enabled = _env_on("OPENCODE_ENABLED", "")
-        self.alice_enabled = _env_on("ALICE_ENABLED", "")
         self.alice_accounts = _env_int("ALICE_ACCOUNTS", 1, 1, MAX_ALICE_ACCOUNTS)
-        self.duckai_enabled = _env_on("DUCKAI_ENABLED", "")
         self.duckai_accounts = _env_int("DUCKAI_ACCOUNTS", 1, 1, MAX_DUCKAI_ACCOUNTS)
-        self.mistral_enabled = _env_on("MISTRAL_ENABLED", "")
         self.mistral_logins = _env_list("MISTRAL_LOGINS")
-        self.aistudio_enabled = _env_on("AISTUDIO_ENABLED", "")
         self.aistudio_logins = _env_list("AISTUDIO_LOGINS")
+        self.aihorde_api_keys = _env_list("AIHORDE_API_KEYS")
         self.aistudio_headless = not _env_off("AISTUDIO_HEADLESS", "1")
         self.aistudio_state_dir = _env_str("AISTUDIO_STATE_DIR")
         self.aistudio_doh_url = _env_str("AISTUDIO_DOH_URL", "https://xbox-dns.ru/dns-query")
-        self.byok = _env_first("BYOK", "BYOK_MODE", "DANYAPI_BYOK_MODE").strip().lower() in _TRUE_VALUES
+        self.byok = _env_on("BYOK", "")
         self.timeout = _env_positive_float("DANYAPI_TIMEOUT", 60.0, MIN_TIMEOUT_SEC)
         self.acquire_timeout = _env_float_opt("DANYAPI_ACQUIRE_TIMEOUT")
         self.session_cache_size = _env_int("DANYAPI_SESSION_CACHE_SIZE", 128, 1, MAX_SESSION_CACHE_SIZE)

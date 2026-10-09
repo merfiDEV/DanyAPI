@@ -55,17 +55,12 @@ GUARD_SKIP_DIRS = {"__pycache__", ".git"}
 TOOL_OPTIONAL_STEPS = {"clang-format", "clang-tidy"}
 
 ENV_KEY_RE = re.compile(r"^([A-Za-z0-9_]+)=")
-ENV_NAME_RE = re.compile(r'_env_(?:int|float|positive_float|float_opt|str|list|on|off|first)\(\s*"([A-Za-z0-9_]+)"')
+ENV_NAME_RE = re.compile(r'_env_(?:int|float|positive_float|float_opt|str|list|on|off)\(\s*"([A-Za-z0-9_]+)"')
 CREDENTIAL_BLOCK_RE = re.compile(r"CREDENTIAL_ENV_NAMES = \(([^)]*)\)", re.DOTALL)
 CONFIG_SOURCE = ROOT / "danyapi" / "config.py"
 ENV_EXAMPLE = ROOT / ".env.example"
 EXTRA_CONFIG_NAMES = frozenset({"DANYAPI_GIGACHAT_CA_FILE"})
-ENV_ALIASES = {
-    "DANYAPI_GIGACHAT_SCOPE": "GIGACHAT_SCOPE",
-    "BYOK": "BYOK_MODE",
-    "BYOK_MODE": "BYOK_MODE",
-    "DANYAPI_BYOK_MODE": "BYOK_MODE",
-}
+ENV_ALIASES = {}
 
 GREEN = "\033[32m"
 YELLOW = "\033[33m"

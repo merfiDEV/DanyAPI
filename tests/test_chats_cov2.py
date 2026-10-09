@@ -937,7 +937,7 @@ async def test_alice_stream_and_busy_and_missing_pool(monkeypatch):
     with pytest.raises(HTTPException) as excinfo:
         await chats_mod._chat_completions_alice(_chat(model="yagpt"), pool=None)
     assert excinfo.value.status_code == 503
-    assert excinfo.value.detail == "alice provider is not configured (set ALICE_ENABLED=1 to enable)"
+    assert excinfo.value.detail == "alice provider is not configured"
 
 
 async def test_duckai_rejects_files_and_the_unsupported_params():
@@ -990,4 +990,4 @@ async def test_duckai_stream_and_busy_and_missing_pool(monkeypatch):
     with pytest.raises(HTTPException) as excinfo:
         await chats_mod._chat_completions_duckai(_chat(model="duckai-free"), pool=None)
     assert excinfo.value.status_code == 503
-    assert excinfo.value.detail == "duckai provider is not configured (set DUCKAI_ENABLED=1 to enable)"
+    assert excinfo.value.detail == "duckai provider is not configured"

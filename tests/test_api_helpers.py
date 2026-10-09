@@ -1133,6 +1133,7 @@ def _patch_creds(ds_tokens=None, qwen_tokens=None, cache=True):
         patch.object(QC, "fetch_models", new=AsyncMock(return_value=[{"id": "m1", "info": {"meta": {"chat_type": ["t2t"]}}}])),
         patch.object(DSC, "aclose", new=AsyncMock()),
         patch.object(QC, "aclose", new=AsyncMock()),
+        patch.object(settings, "disabled_providers", frozenset({"opencode", "alice", "duckai", "aihorde"})),
     ):
         stack.enter_context(patch_cm)
     return stack
@@ -1155,6 +1156,7 @@ def test_deepseek_invalid_skipped():
     with (
         patch.object(settings, "deepseek_tokens", ["bad"]),
         patch.object(settings, "qwen_tokens", []),
+        patch.object(settings, "disabled_providers", frozenset({"opencode", "alice", "duckai", "aihorde"})),
         patch.object(DSC, "check_auth", new=AsyncMock(return_value=False)),
     ):
         with pytest.raises(RuntimeError):
@@ -1177,9 +1179,10 @@ def test_duckai_kept_when_bot_check_misses():
 
     with (
         _patch_creds(qwen_tokens=[]),
-        patch.object(settings, "duckai_enabled", True),
+        patch.object(settings, "disabled_providers", frozenset({"opencode", "alice", "aihorde"})),
         patch.object(settings, "duckai_accounts", 1),
         patch.object(DAC, "check_auth", new=AsyncMock(return_value=False)),
+        patch.object(DAC, "aclose", new=AsyncMock()),
     ):
         with TestClient(app):
             assert app.state.duckai_pool is not None
@@ -1194,20 +1197,17 @@ def test_no_credentials_raises():
         patch.object(settings, "qwen_tokens", []),
         patch.object(settings, "gigachat_keys", []),
         patch.object(settings, "opencode_keys", []),
-        patch.object(settings, "opencode_enabled", False),
-        patch.object(settings, "alice_enabled", False),
-        patch.object(settings, "duckai_enabled", False),
-        patch.object(settings, "mistral_enabled", False),
+        patch.object(
+            settings,
+            "disabled_providers",
+            frozenset({"deepseek", "qwen", "gigachat", "opencode", "alice", "duckai", "mistral", "aistudio", "aihorde"}),
+        ),
         patch.object(settings, "mistral_logins", []),
-        patch.object(settings, "aistudio_enabled", False),
         patch.object(settings, "aistudio_logins", []),
     ):
         with pytest.raises(
             RuntimeError,
-            match=(
-                "DEEPSEEK_TOKENS, QWEN_TOKENS, GIGACHAT_KEYS, OPENCODE_KEYS, ALICE_ENABLED=1, "
-                "OPENCODE_ENABLED=1, DUCKAI_ENABLED=1, MISTRAL_ENABLED=1 or AISTUDIO_ENABLED=1"
-            ),
+            match="no valid credentials",
         ):
             with TestClient(app):
                 pass
@@ -2023,6 +2023,7 @@ def test_lifespan_qwen_invalid_token():
     for patch_cm in (
         patch.object(settings, "deepseek_tokens", []),
         patch.object(settings, "qwen_tokens", ["bad"]),
+        patch.object(settings, "disabled_providers", frozenset({"opencode", "alice", "duckai", "aihorde"})),
         patch.object(QC, "check_auth", new=AsyncMock(return_value=False)),
     ):
         stack.enter_context(patch_cm)

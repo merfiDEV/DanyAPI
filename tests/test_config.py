@@ -111,16 +111,6 @@ def test_gigachat_keys_comma(settings_for):
 def test_gigachat_scope_default_and_override(settings_for):
     assert settings_for({}).gigachat_scope == "GIGACHAT_API_PERS"
     assert settings_for({"GIGACHAT_SCOPE": "GIGACHAT_API_CORP"}).gigachat_scope == "GIGACHAT_API_CORP"
-    assert settings_for({"DANYAPI_GIGACHAT_SCOPE": "GIGACHAT_API_B2B"}).gigachat_scope == "GIGACHAT_API_B2B"
-
-
-def test_alice_disabled_by_default(settings_for):
-    assert settings_for({}).alice_enabled is False
-
-
-@pytest.mark.parametrize("value", ["1", "true", "yes", "on", "TRUE", "On"])
-def test_alice_enabled_variants(settings_for, value):
-    assert settings_for({"ALICE_ENABLED": value}).alice_enabled is True
 
 
 def test_alice_accounts_bounds(settings_for):

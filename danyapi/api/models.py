@@ -8,6 +8,9 @@ from typing import Any
 
 from fastapi import HTTPException, Request
 
+from ..aihorde.client import ANON_KEY as AIHORDE_ANON_KEY
+from ..aihorde.client import AIHordeClient
+from ..aihorde.client import catalog_models as aihorde_catalog_models
 from ..aistudio.client import LIST_MODELS_URL, build_list_models_request
 from ..aistudio.client import parse_models as aistudio_parse_models
 from ..alice.client import MODEL_ALIASES as ALICE_MODEL_IDS
@@ -61,6 +64,7 @@ _MODEL_CACHE: dict[str, Any] = {
     "alice_ids": None,
     "duckai_ids": None,
     "mistral_ids": None,
+    "aihorde_ids": None,
 }
 
 _REFRESH_LOCKS: dict[str, asyncio.Lock] = {provider: asyncio.Lock() for provider in BYOK_PROVIDERS}
@@ -94,6 +98,8 @@ def _probe_client(provider: str, api_key: str | None) -> Any:
         return GigaChatClient(key=api_key, scope=settings.gigachat_scope, timeout=settings.timeout)
     if provider == "opencode":
         return opencode_zen.OpenCodeClient(key=api_key or "", timeout=settings.timeout)
+    if provider == "aihorde":
+        return AIHordeClient(api_key=api_key or AIHORDE_ANON_KEY, timeout=settings.timeout)
     return None
 
 
@@ -277,6 +283,23 @@ async def _fetch_aistudio_models(client: Any) -> list[dict]:
     return aistudio_parse_models(payload)
 
 
+async def _fetch_aihorde_models(client: AIHordeClient) -> list[dict]:
+    raw = await client.fetch_models()
+    models: list[dict] = []
+    for entry in raw:
+        if not isinstance(entry, dict) or not entry.get("id"):
+            continue
+        models.append(
+            {
+                "id": entry["id"],
+                "name": entry.get("name") or entry["id"],
+                "owned_by": "aihorde",
+                "model_type": entry.get("model_type", "chat"),
+            }
+        )
+    return models
+
+
 MODEL_FETCHERS: dict[str, Any] = {
     "deepseek": _fetch_deepseek_models,
     "qwen": _fetch_qwen_models,
@@ -286,6 +309,7 @@ MODEL_FETCHERS: dict[str, Any] = {
     "duckai": _fetch_duckai_models,
     "mistral": _fetch_mistral_models,
     "aistudio": _fetch_aistudio_models,
+    "aihorde": _fetch_aihorde_models,
 }
 
 
@@ -476,6 +500,8 @@ def _known_ids(provider: str) -> set[str]:
         ids = ids | {str(entry.get("id", "")).lower() for entry in mistral_catalog_models() if entry.get("id")}
     elif provider == "alice":
         ids = ids | {alias.lower() for alias in ALICE_MODEL_IDS}
+    elif provider == "aihorde":
+        ids = ids | {str(entry.get("id", "")).lower() for entry in aihorde_catalog_models() if entry.get("id")}
     return ids
 
 
@@ -503,6 +529,12 @@ def _resolve_provider(model: str) -> str:
         provider = "mistral"
     elif lowered in _known_ids("aistudio") or lowered.startswith(("gemini", "gemma", "antigravity", "deep-research")):
         provider = "aistudio"
+    elif lowered in _known_ids("aihorde") or lowered.startswith((
+        "cydonia", "skyfall", "rocinante", "behemoth", "stheno",
+        "magnum-12b", "gemma-3-abliterated", "gemma-4-heretic",
+        "gemma-heretic", "horde-uncensored",
+    )):
+        provider = "aihorde"
     elif _is_deepseek_model(lowered):
         provider = "deepseek"
     else:

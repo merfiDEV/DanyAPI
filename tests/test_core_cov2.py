@@ -163,9 +163,8 @@ def _isolated_state(monkeypatch):
     monkeypatch.setattr(core.settings, "deepseek_tokens", [])
     monkeypatch.setattr(core.settings, "qwen_tokens", [])
     monkeypatch.setattr(core.settings, "gigachat_keys", [])
-    monkeypatch.setattr(core.settings, "alice_enabled", False)
+    monkeypatch.setattr(core.settings, "disabled_providers", frozenset({"opencode", "alice", "duckai", "aihorde"}))
     monkeypatch.setattr(core.settings, "alice_accounts", 0)
-    monkeypatch.setattr(core.settings, "duckai_enabled", False)
     monkeypatch.setattr(core.settings, "duckai_accounts", 0)
     monkeypatch.setattr(core.settings, "cache_enabled", False)
     monkeypatch.setattr(core.settings, "usage_enabled", False)
@@ -339,9 +338,8 @@ async def test_lifespan_reports_gigachat_key_position_not_client_position(monkey
 
 
 async def test_lifespan_builds_alice_and_duckai_accounts(monkeypatch, caplog):
-    monkeypatch.setattr(core.settings, "alice_enabled", True)
+    monkeypatch.setattr(core.settings, "disabled_providers", frozenset({"opencode", "aihorde"}))
     monkeypatch.setattr(core.settings, "alice_accounts", 2)
-    monkeypatch.setattr(core.settings, "duckai_enabled", True)
     monkeypatch.setattr(core.settings, "duckai_accounts", 1)
     monkeypatch.setattr(core.settings, "deepseek_tokens", ["tok"])
     monkeypatch.setattr(core, "AccountPool", _PoolFactory())
@@ -362,9 +360,8 @@ async def test_lifespan_builds_alice_and_duckai_accounts(monkeypatch, caplog):
 
 
 async def test_lifespan_does_not_claim_ready_alice_accounts_when_every_probe_fails(monkeypatch, caplog):
-    monkeypatch.setattr(core.settings, "alice_enabled", True)
+    monkeypatch.setattr(core.settings, "disabled_providers", frozenset({"opencode", "aihorde"}))
     monkeypatch.setattr(core.settings, "alice_accounts", 2)
-    monkeypatch.setattr(core.settings, "duckai_enabled", True)
     monkeypatch.setattr(core.settings, "duckai_accounts", 1)
     monkeypatch.setattr(core, "AccountPool", _PoolFactory())
     plan = _ClientPlan().add("alice", _Spec(auth=False), _Spec(auth=False))

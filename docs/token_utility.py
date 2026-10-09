@@ -76,8 +76,8 @@ TEXTS: dict[str, str] = {
     "results_sub": "Tokens for DeepSeek &amp; Qwen were successfully extracted. Use them in your <code>.env</code> when running the API locally.",
     "results_other_providers": "Two more providers need no browser token: add a GigaChat authorization key as"
     " <code>GIGACHAT_KEYS</code> from the Studio API settings and an OpenCode Zen key as"
-    " <code>OPENCODE_KEYS</code> from <code>opencode.ai/auth</code>, or set <code>ALICE_ENABLED=1</code> for the"
-    " unofficial keyless Alice provider.",
+    " <code>OPENCODE_KEYS</code> from <code>opencode.ai/auth</code>. The unofficial keyless Alice provider"
+    " is enabled by default.",
     "results_pane_ds": "DeepSeek token",
     "results_pane_qw": "Qwen token",
     "results_copy": "Copy",
@@ -1067,7 +1067,7 @@ def main() -> None:
     print()
     print(" GigaChat uses a Studio authorization key instead: set GIGACHAT_KEYS in .env by hand.")
     print(" OpenCode Zen uses an API key from opencode.ai/auth: set OPENCODE_KEYS in .env by hand.")
-    print(" The unofficial Alice provider needs no credentials: set ALICE_ENABLED=1.")
+    print(" The unofficial Alice provider needs no credentials and is enabled by default.")
     print()
 
     serve(port=args.port, open_browser=not args.no_browser)

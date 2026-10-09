@@ -46,8 +46,6 @@ docker run -d -p 8000:8000 \
   -e QWEN_TOKENS="token3" \
   -e GIGACHAT_KEYS="<authorization_key>" \
   -e OPENCODE_KEYS="<zen_api_key>" \
-  -e ALICE_ENABLED=1 \
-  -e DUCKAI_ENABLED=1 \
   ghcr.io/fanatfanata/danyapi:latest
 ```
 
@@ -81,22 +79,17 @@ Credentials:
 | `DEEPSEEK_TOKENS` | empty | Comma-separated DeepSeek web tokens. Required unless another provider is used |
 | `QWEN_TOKENS` | empty | Comma-separated Qwen web tokens. Required unless another provider is used |
 | `GIGACHAT_KEYS` | empty | Comma-separated GigaChat authorization keys, base64 of `client_id:client_secret` from the GigaChat Studio account |
-| `GIGACHAT_SCOPE` / `DANYAPI_GIGACHAT_SCOPE` | `GIGACHAT_API_PERS` | GigaChat scope: `GIGACHAT_API_PERS`, `GIGACHAT_API_B2B` or `GIGACHAT_API_CORP` |
+| `GIGACHAT_SCOPE` | `GIGACHAT_API_PERS` | GigaChat scope: `GIGACHAT_API_PERS`, `GIGACHAT_API_B2B` or `GIGACHAT_API_CORP` |
 | `DANYAPI_GIGACHAT_CA_FILE` | empty | Path to a CA bundle for GigaChat, empty uses the bundled Russian root CA |
 | `OPENCODE_KEYS` | empty | Comma-separated OpenCode Zen API keys from `https://opencode.ai/auth` |
-| `OPENCODE_ENABLED` | empty | `1` serves the Zen free tier without a key, ignored once `OPENCODE_KEYS` is set |
-| `ALICE_ENABLED` | empty | `1` enables the unofficial Yandex Alice provider, see the warning below |
 | `ALICE_ACCOUNTS` | `1` | Concurrent Alice connections, `1` to `4` |
-| `DUCKAI_ENABLED` | empty | `1` enables the unofficial Duck.ai provider, see the warning below |
 | `DUCKAI_ACCOUNTS` | `1` | Concurrent Duck.ai connections, `1` to `4` |
-| `MISTRAL_ENABLED` | empty | `1` enables the unofficial Mistral Le Chat provider, see the warning below |
 | `MISTRAL_LOGINS` | empty | Comma-separated Le Chat accounts as `email:password`, one client per login |
-| `AISTUDIO_ENABLED` | empty | `1` enables the unofficial Google AI Studio web provider, see the warning below |
 | `AISTUDIO_LOGINS` | empty | Comma-separated Google accounts as `email:password`, one browser per login |
 | `AISTUDIO_HEADLESS` | `1` | `0` shows the browser window, useful for a first manual login |
 | `AISTUDIO_STATE_DIR` | empty | Directory for saved browser states, empty means the cache directory |
 | `AISTUDIO_DOH_URL` | `https://xbox-dns.ru/dns-query` | DNS-over-HTTPS resolver used for Google hosts, empty disables it |
-| `BYOK` / `BYOK_MODE` / `DANYAPI_BYOK_MODE` | empty | `1` runs in bring-your-own-key mode: DeepSeek, Qwen, GigaChat, OpenCode Zen, Mistral and AI Studio requests supply their own key or login, Alice and Duck.ai need none. For Mistral the key is a Le Chat `email:password` pair, for AI Studio it is a Google `email:password` pair, several can be sent comma-separated. The first name that is set wins. `GET /health` reports every provider as enabled and reports the per-key pools |
+| `BYOK` | empty | `1` runs in bring-your-own-key mode: DeepSeek, Qwen, GigaChat, OpenCode Zen, Mistral and AI Studio requests supply their own key or login, Alice and Duck.ai need none. For Mistral the key is a Le Chat `email:password` pair, for AI Studio it is a Google `email:password` pair, several can be sent comma-separated. `GET /health` reports every provider as enabled and reports the per-key pools |
 | `DANYAPI_ADMIN_TOKEN` | empty | Bearer token required by `POST /v1/tokens`, empty keeps that endpoint disabled |
 | `DANYAPI_DISABLED_PROVIDERS` | empty | Comma-separated provider names (`deepseek`, `qwen`, `gigachat`, `opencode`, `alice`, `duckai`, `mistral`, `aistudio`) to turn off completely |
 | `MCP_SERVERS` | empty | Comma-separated MCP servers as `name=command` for stdio or `name=url` for streamable HTTP, up to 16. Used for server-side tool execution, see the MCP section |
@@ -165,7 +158,7 @@ OPENCODE_KEYS="<zen_api_key>"
 
 Zen is metered per token rather than free. A set of models is on a free tier, and those are listed with `free` marked in `/v1/models`, but reaching them needs an account: `GET /models` answers with or without a key, so it cannot tell a good key from a bad one, and a key is only judged on the first real request. A rejected key returns `401`, and the account is set aside and retried on the usual revive cooldown instead of the server refusing to start.
 
-To reach the free tier, set `OPENCODE_ENABLED=1` and leave `OPENCODE_KEYS` empty, or put the sentinel `public` in `OPENCODE_KEYS`. Either way one account comes up, the first sending no `Authorization` header at all. The flag is ignored once `OPENCODE_KEYS` holds anything. In BYOK mode a caller who sends no key gets the keyless account instead of a `401`. Do not reach for a made up placeholder instead: Zen rejects an unrecognised key on the free models too rather than ignoring it, so any other value turns a working free tier into a `401`.
+To reach the free tier, leave `OPENCODE_KEYS` empty, or put the sentinel `public` in `OPENCODE_KEYS`. Either way one account comes up, the first sending no `Authorization` header at all. In BYOK mode a caller who sends no key gets the keyless account instead of a `401`. Do not reach for a made up placeholder instead: Zen rejects an unrecognised key on the free models too rather than ignoring it, so any other value turns a working free tier into a `401`.
 
 Zen also accepts the literal key `public`, which is what OpenCode itself sends when it has no account, and which the gateway treats as a request with no key at all rather than as a credential. Captured off the wire from OpenCode 1.18.33 running keyless, the request it makes is `Authorization: Bearer public`, `User-Agent: opencode/1.18.33 ai-sdk/provider-utils/4.0.23 runtime/bun/1.3.14`, `x-opencode-client: cli`, `x-opencode-project: global`, plus a `x-opencode-session` and `x-opencode-request` pair. This provider sends that same set, with `x-opencode-client` reading `danyapi` rather than `cli`.
 
@@ -187,7 +180,7 @@ Differences from the OpenAI API to keep in mind: only `chat/completions` is spok
 
 `alice`, `alice-ai` and `yagpt` route to the Yandex Alice consumer endpoint `wss://uniproxy.alice.yandex.net/uni.ws`. It needs no key, no account and no token.
 
-Read this before enabling it. Yandex has no public API for this, so the provider speaks an undocumented internal protocol of a consumer service, and `yandex.ru/legal/alice_chat` clause 4.2 forbids circumventing technical protections and imitating the service's functioning. Yandex also versions and reshapes this protocol without notice, so the provider can break at any time. It is disabled unless you set `ALICE_ENABLED=1`, which is your acknowledgement of the above.
+Read this before enabling it. Yandex has no public API for this, so the provider speaks an undocumented internal protocol of a consumer service, and `yandex.ru/legal/alice_chat` clause 4.2 forbids circumventing technical protections and imitating the service's functioning. Yandex also versions and reshapes this protocol without notice, so the provider can break at any time. It is enabled by default; disable it via `DANYAPI_DISABLED_PROVIDERS=alice` if you do not accept the above.
 
 Behaviour to expect from the answers: the endpoint is stateless, so the whole conversation is folded into one prompt; it routes prompts across scenario handlers rather than to a single model, so many prompts get a canned Alice reply or a persona refusal instead of an answer; and there is no incremental text, so streaming sends the finished text in a single chunk. A request needs at least one message. `max_tokens` is honoured by trimming the answer and reporting `finish_reason` `length`. There is no `n`, `top_p`, `logprobs`, `top_logprobs`, `presence_penalty`, `frequency_penalty` or `logit_bias`, and no tool calling: tools in the request are ignored, so a tool-enabled client gets prose back. A deterministic refusal is reported as `400` without retrying, while an upstream stall is reported as `502` after the retry budget.
 
@@ -195,7 +188,7 @@ Behaviour to expect from the answers: the endpoint is stateless, so the whole co
 
 The free-tier Duck.ai models, currently `mistral-small-2603`, `gpt-5.6-luna`, `tinfoil/gemma4-31b`, `gpt-5.4-mini`, `tinfoil/gpt-oss-120b` and `claude-haiku-4-5`, route to DuckDuckGo's public Duck.ai chat at `https://duck.ai/duckchat/v1`. The list is not fixed: it is parsed from the model table the Duck.ai web bundle currently ships, filtered to the models DuckDuckGo grants the free tier, and refetched on the model refresh interval. It needs no key, no account and no token.
 
-Read this before enabling it. DuckDuckGo has no public API for this, so the provider speaks an undocumented internal protocol of a consumer service, and the attestation it demands is a browser fingerprint. The Duck.ai terms at `https://duckduckgo.com/duckduckgo-help-pages/duckai` forbid circumventing technical protections and imitating the service's functioning, and DuckDuckGo reshapes this protocol without notice, so the provider can break at any time. It is disabled unless you set `DUCKAI_ENABLED=1`, which is your acknowledgement of the above.
+Read this before enabling it. DuckDuckGo has no public API for this, so the provider speaks an undocumented internal protocol of a consumer service, and the attestation it demands is a browser fingerprint. The Duck.ai terms at `https://duckduckgo.com/duckduckgo-help-pages/duckai` forbid circumventing technical protections and imitating the service's functioning, and DuckDuckGo reshapes this protocol without notice, so the provider can break at any time. It is enabled by default; disable it via `DANYAPI_DISABLED_PROVIDERS=duckai` if you do not accept the above.
 It does work, and it was measured end to end through the real HTTP surface on a host with no proxy: nine of twelve consecutive requests answered with real model output, streaming included. Two things make that possible and are easy to get wrong. duck.ai compares the build identifier in `x-fe-version` against the one it is currently serving, so the provider reads it from the landing page on startup; a stale value is refused as an unsupported entrypoint. And every request carries a proof that a real browser made it, computed by evaluating a script DuckDuckGo serves fresh on each request against a browser environment. The solver in `danyapi/duckai/jsa_solver.js` reproduces that environment: DOM prototype chain, error and stack API, a box model, and an HTML fragment parser. Some of those scripts are HTML parser differentials that only a real parser answers correctly, so a minority of requests is refused with `403` and an explanation. The provider re-solves a freshly served attestation and retries those, keeps a startup miss from stopping the server, and never disables the account over one.
 
 Now the part worth planning around. After a few dozen automated requests in a row, DuckDuckGo stops judging the proof and refuses the client outright: `ERR_BN_LIMIT`, the same "unsupported entrypoint" wording, returned in about a tenth of a second, before any attestation is evaluated. A real Chrome on the same host kept answering normally throughout, and roughly twenty minutes of quiet did not clear it. So this is not your address being blocked and not a solver bug; it is DuckDuckGo deciding a Python client is a client, and the decision is sticky. The honest reading is that a provider which has to impersonate a browser will be recognised eventually, and there is no amount of header tuning in Python that changes that, because what is missing is a browser engine, not a header. Treat this provider as something that works interactively and in light use, not as a dependable backend route, and keep the other providers for anything that has to be reliable.
@@ -206,7 +199,7 @@ Differences from the OpenAI API to keep in mind: there is no `system` role, so s
 
 The free Le Chat models, currently `mistral-small-latest`, `mistral-medium-latest`, `mistral-large-latest`, `magistral-medium-latest`, `codestral-latest` and `mistral-ocr-latest`, route to Le Chat at `https://chat.mistral.ai/api/chat`, the same surface the Android app speaks. Le Chat no longer answers anonymous sessions, so the provider logs in with an account: set `MISTRAL_LOGINS` to `email:password` pairs and the client negotiates an Ory session token on startup, refreshes it with a fresh login when it expires, and always creates chats incognito so they never land in the account history.
 
-Read this before enabling it. Mistral has no public API for this, so the provider speaks an undocumented internal protocol of a consumer service, and Mistral reshapes it without notice, so the provider can break at any time. Free accounts are rate limited per message count: when the cap is hit the request is reported as `429` with an explanation. It is disabled unless you set `MISTRAL_ENABLED=1` and at least one login, which is your acknowledgement of the above. In BYOK mode the same `email:password` pairs travel in the `Authorization` header instead, one pool per key set.
+Read this before enabling it. Mistral has no public API for this, so the provider speaks an undocumented internal protocol of a consumer service, and Mistral reshapes it without notice, so the provider can break at any time. Free accounts are rate limited per message count: when the cap is hit the request is reported as `429` with an explanation. It is enabled by default once at least one login is set; disable it via `DANYAPI_DISABLED_PROVIDERS=mistral` if you do not accept the above. In BYOK mode the same `email:password` pairs travel in the `Authorization` header instead, one pool per key set.
 
 Differences from the OpenAI API to keep in mind: the endpoint is stateless per request, so the whole conversation is folded into one prompt with XML role tags, and system and developer messages are folded into its head; there is no `n`, `top_p`, penalty, `logprobs` or `top_logprobs` support; file attachments are rejected; the model named in the request is echoed back because Le Chat picks its own serving model; and there is no usage accounting upstream, so token counts are estimated from the text. Tool calls are emulated through prompt injection: tools are described in the prompt and a `<tool-call>` reply is parsed back into `tool_calls`.
 
@@ -214,10 +207,9 @@ Differences from the OpenAI API to keep in mind: the endpoint is stateless per r
 
 The AI Studio web chat at `https://aistudio.google.com` is served through its internal MakerSuiteService RPC. Requests need a Google account session plus a BotGuard attestation token that is bound to the prompt text, so the provider drives a real Camoufox browser: it logs in with an account, runs the AI Studio front end, and mints one token per request. Chat traffic itself goes over `alkaliMakerSuite` with a DNS-over-HTTPS resolver, because the RPC answers `403 Region not supported` when the host resolves to some Google edges.
 
-Read this before enabling it. Google has no public API for this, so the provider speaks an undocumented internal protocol of a consumer service, and the BotGuard gate is an anti-abuse mechanism; the provider does not bypass it, it runs the same front end a browser runs. Google reshapes this protocol without notice, so the provider can break at any time. It is disabled unless you set `AISTUDIO_ENABLED=1` and at least one `AISTUDIO_LOGINS` entry, which is your acknowledgement of the above.
+Read this before enabling it. Google has no public API for this, so the provider speaks an undocumented internal protocol of a consumer service, and the BotGuard gate is an anti-abuse mechanism; the provider does not bypass it, it runs the same front end a browser runs. Google reshapes this protocol without notice, so the provider can break at any time. It is enabled by default once at least one `AISTUDIO_LOGINS` entry is set; disable it via `DANYAPI_DISABLED_PROVIDERS=aistudio` if you do not accept the above.
 
 ```bash
-AISTUDIO_ENABLED=1
 AISTUDIO_LOGINS="you@gmail.com:password"
 ```
 
