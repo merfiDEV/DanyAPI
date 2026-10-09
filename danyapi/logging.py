@@ -237,6 +237,16 @@ def _stop_listener(listener: Any, attempts: int = _STOP_ATTEMPTS) -> bool:
     return True
 
 
+def _warn_quietly(message: str, *args: object) -> None:
+    logger = logging.getLogger(__name__)
+    previous = logging.raiseExceptions
+    logging.raiseExceptions = False
+    try:
+        logger.warning(message, *args)
+    finally:
+        logging.raiseExceptions = previous
+
+
 def _drop_file_handler(root: logging.Logger) -> None:
     handler = _find_handler(root, FILE_HANDLER_NAME)
     if handler is None:
@@ -337,13 +347,13 @@ def shutdown() -> None:
         try:
             stopped = _stop_listener(listener)
         except Exception as exc:
-            logging.getLogger(__name__).warning("log queue listener did not stop: %s", exc)
+            _warn_quietly("log queue listener did not stop: %s", exc)
             break
         if not stopped:
-            logging.getLogger(__name__).warning("log queue listener did not stop, its queue is stuck")
+            _warn_quietly("log queue listener did not stop, its queue is stuck")
         _queue_listeners.pop()
     if _DroppingQueueHandler.dropped:
-        logging.getLogger(__name__).warning("%d log record(s) were dropped because the file log queue was full", _DroppingQueueHandler.dropped)
+        _warn_quietly("%d log record(s) were dropped because the file log queue was full", _DroppingQueueHandler.dropped)
 
 
 atexit.register(shutdown)

@@ -335,9 +335,9 @@ def test_dsm_strip_markers_returns_markerless_text_unchanged():
 
 def test_dsm_strip_markers_markerless_text_is_fast():
     text = "a < b and c > d, " * 20000
-    started = time.monotonic()
+    started = time.process_time()
     assert _strip_output(text) == text
-    assert time.monotonic() - started < 0.5
+    assert time.process_time() - started < 0.5
 
 
 def test_dsm_strip_markers_terminates_on_repeated_hidden_blocks():
@@ -459,37 +459,37 @@ def test_dsm_guarded_span_scan_equals_unguarded_regex_substitution(body: list[st
 )
 def test_dsm_strip_output_is_linear_on_unterminated_hidden_blocks(label, unit, count):
     text = unit * count
-    started = time.monotonic()
+    started = time.process_time()
     _strip_output(text)
-    assert time.monotonic() - started < 0.5, label
+    assert time.process_time() - started < 0.5, label
 
 
 def test_dsm_strip_dsml_is_linear_on_unterminated_hidden_blocks():
     text = "<|DSML|thinking>" * 2000
-    started = time.monotonic()
+    started = time.process_time()
     _strip_dsml(text)
-    assert time.monotonic() - started < 0.5
+    assert time.process_time() - started < 0.5
 
 
 def test_dsm_strip_output_is_linear_on_large_terminated_hidden_blocks():
     text = "<|DSML|thinking>secret</|DSML|thinking>" * 2000
-    started = time.monotonic()
+    started = time.process_time()
     assert _strip_output(text) == " " * 2000
-    assert time.monotonic() - started < 0.5
+    assert time.process_time() - started < 0.5
 
 
 def test_dsm_lax_parameter_scan_is_linear():
     text = f'<{DSML}parameter name="a">' * 8000
-    started = time.monotonic()
+    started = time.process_time()
     assert list(dsm._iter_dsml_lax_parameters(text)) == []
-    assert time.monotonic() - started < 0.5
+    assert time.process_time() - started < 0.5
 
 
 def test_dsm_render_message_of_many_naked_markers_is_fast():
-    started = time.monotonic()
+    started = time.process_time()
     rendered = render_message({"role": "user", "content": "|DSML| " * 200})
     assert rendered == " " * 400
-    assert time.monotonic() - started < 0.5
+    assert time.process_time() - started < 0.5
 
 
 def test_com_strip_fences_matches_regex_on_well_formed_input():
@@ -515,9 +515,9 @@ def test_com_strip_fences_keeps_unterminated_fence():
 @pytest.mark.parametrize("size", [5120, 20480, 40960])
 def test_com_unterminated_fence_is_linear(size):
     text = "```json\n" + "a" * size
-    started = time.monotonic()
+    started = time.process_time()
     assert toolemu.parse_tool_calls(text) is None
-    assert time.monotonic() - started < 0.5, size
+    assert time.process_time() - started < 0.5, size
 
 
 def test_com_iter_tool_call_blocks_pairs_open_and_close():
@@ -538,17 +538,17 @@ def test_com_iter_tool_call_blocks_matches_legacy_regex():
 @pytest.mark.parametrize("count", [2000, 16000])
 def test_com_unclosed_tool_call_opens_are_linear(count):
     text = "<tool_call>" * count
-    started = time.monotonic()
+    started = time.process_time()
     assert toolemu.parse_tool_calls(text) is None
-    assert time.monotonic() - started < 0.8, count
+    assert time.process_time() - started < 0.8, count
 
 
 @pytest.mark.parametrize("count", [2000, 16000])
 def test_com_unclosed_tool_calls_wrapper_opens_are_linear(count):
     text = "<tool_calls>" * count
-    started = time.monotonic()
+    started = time.process_time()
     assert toolemu.parse_tool_calls(text) is None
-    assert time.monotonic() - started < 0.8, count
+    assert time.process_time() - started < 0.8, count
 
 
 def test_com_tool_call_normalise_arguments_default_coerces_edit():
@@ -615,9 +615,9 @@ def test_cp_schema_xml_pairs_reads_paired_and_self_closed():
 def test_cp_schema_xml_scan_is_linear_with_many_tools():
     text = "<foo attr=1>" * 3750
     schemas = {f"tool{index}": {"a": "string"} for index in range(40)}
-    started = time.monotonic()
+    started = time.process_time()
     assert toolemu.parse_tool_calls(text, schemas) is None
-    assert time.monotonic() - started < 0.5
+    assert time.process_time() - started < 0.5
 
 
 def test_cp_rejected_container_hides_its_children():
@@ -786,9 +786,9 @@ def test_cp_iter_json_objects_scan_cap(monkeypatch):
 
 def test_cp_iter_json_objects_rejections_are_bounded():
     text = "{x" * 5000
-    started = time.monotonic()
+    started = time.process_time()
     assert list(cp._iter_json_objects(text)) == []
-    assert time.monotonic() - started < 1.0
+    assert time.process_time() - started < 1.0
 
 
 def test_cp_iter_json_objects_scans_every_object_in_legitimate_text():
@@ -960,9 +960,9 @@ def test_nms_name_normalisation_with_many_unknown_keys_is_fast():
     schemas = tool_schema_map(tools)
     details = tool_schema_detail(tools)
     call = ToolCall("c1", "tool_59", json.dumps({f"unknown_{index}": "x" for index in range(400)}))
-    started = time.monotonic()
+    started = time.process_time()
     result = nms.fix_tool_calls([call], schemas, details, "report")
-    assert time.monotonic() - started < 2.0
+    assert time.process_time() - started < 2.0
     assert len(json.loads(result[0].arguments)) == 400
 
 
@@ -1227,12 +1227,12 @@ def test_bnd_streaming_many_names_is_fast():
     schemas = {f"tool_{index}": {} for index in range(300)}
     buffer = ""
     shown = 0
-    started = time.monotonic()
+    started = time.process_time()
     for _ in range(200):
         buffer += "x" * 2000
         _piece, shown, hidden = tool_visible(buffer, shown, False, schemas)
         assert hidden is False
-    assert time.monotonic() - started < 2.0
+    assert time.process_time() - started < 2.0
 
 
 def test_bnd_tool_visible_shown_cursor_is_monotone_over_every_prefix():
@@ -1361,9 +1361,9 @@ def test_bnd_tool_visible_while_hidden_hides_everything():
 
 def test_jf_strip_fences_is_string_based_and_linear():
     text = "```json\n" + "a" * 40000
-    started = time.monotonic()
+    started = time.process_time()
     assert jf._strip_fences(text) == text
-    assert time.monotonic() - started < 0.5
+    assert time.process_time() - started < 0.5
 
 
 def test_jf_strip_trailing_commas_returns_the_same_object_when_no_op():
@@ -1625,19 +1625,19 @@ def test_prm_context_sequence_is_stable_and_sensitive():
 def test_prm_context_sequence_for_megabyte_input_is_fast():
     payload = "data:image/png;base64," + "A" * (4 * 1024 * 1024)
     messages = [{"role": "user", "content": [{"type": "image_url", "image_url": {"url": payload}}]}]
-    started = time.monotonic()
+    started = time.process_time()
     first = context_sequence(messages)
     second = context_sequence(messages)
     assert first == second
     assert len(first) == 1
-    assert time.monotonic() - started < 1.0
+    assert time.process_time() - started < 1.0
 
 
 def test_prm_context_sequence_for_megabyte_text_is_fast():
     messages = [{"role": "user", "content": "q" * (4 * 1024 * 1024)}]
-    started = time.monotonic()
+    started = time.process_time()
     assert context_sequence(messages) == context_sequence(messages)
-    assert time.monotonic() - started < 1.0
+    assert time.process_time() - started < 1.0
 
 
 @pytest.mark.parametrize(

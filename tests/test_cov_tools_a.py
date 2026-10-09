@@ -336,11 +336,11 @@ def test_strip_dsml_keeps_ordinary_markup():
 
 def test_strip_dsml_dangling_no_catastrophic_backtracking():
 
-    started = time.monotonic()
+    started = time.process_time()
     strip_dsml("\uff5c" * 40)
     strip_dsml("<" + "\uff5c" * 40 + "DSML")
     strip_dsml("x" * 5000 + "\uff5c" * 40)
-    assert time.monotonic() - started < 2.0
+    assert time.process_time() - started < 2.0
 
 
 def test_dsml_close_cache_cleared_at_cap():
@@ -517,9 +517,9 @@ def test_resolved_prop_type_passthrough():
 
 def test_dsm_dangling_tail_is_linear_on_a_run_of_spaces():
     text = "hello <|DSML tool_calls" + " " * 200 + "<"
-    started = time.monotonic()
+    started = time.process_time()
     assert _DSML_DANGLING.search(text) is None
-    assert time.monotonic() - started < 0.5
+    assert time.process_time() - started < 0.5
 
 
 def test_dsm_dangling_pattern_has_no_nested_star_over_whitespace():
@@ -538,16 +538,16 @@ def test_dsm_dangling_still_matches_a_plain_trailing_tag():
 def test_dsm_dangling_is_linear_through_strip_output():
     text = "<|DSML tool_calls" + " " * 18 + "<"
     assert len(text) <= 40
-    started = time.monotonic()
+    started = time.process_time()
     assert _strip_output(text) == text
-    assert time.monotonic() - started < 0.2
+    assert time.process_time() - started < 0.2
 
 
 def test_dsm_block_pattern_is_linear_on_a_whitespace_run():
     text = "<||DSML tool_calls" + " " * 20000
-    started = time.monotonic()
+    started = time.process_time()
     assert _DSML_BLOCK.search(text) is None
-    assert time.monotonic() - started < 1.0
+    assert time.process_time() - started < 1.0
 
 
 def test_dsm_block_pattern_has_no_redundant_whitespace_split():
@@ -713,7 +713,7 @@ def test_cp_json_scan_budget_is_not_charged_for_an_unclosed_walk():
 
     assert cp._MAX_JSON_WALK == 16 * 1024
     payload = '{"a": "' + "x" * 205000 + "\n" + '{"name":"f","arguments":{"a":1}}'
-    started = time.monotonic()
+    started = time.process_time()
     found = list(cp._iter_json_objects(payload))
-    assert time.monotonic() - started < 1.0
+    assert time.process_time() - started < 1.0
     assert found and found[-1][0] == {"name": "f", "arguments": {"a": 1}}

@@ -171,18 +171,18 @@ def test_dsml_marker_no_catastrophic_backtracking() -> None:
     import time
 
     text = "\u00a6" * 40
-    started = time.monotonic()
+    started = time.process_time()
     toolemu._strip_dsml(text)
-    assert time.monotonic() - started < 2.0
+    assert time.process_time() - started < 2.0
 
 
 def test_iter_json_objects_bounded() -> None:
     import time
 
     text = "{" * 4000 + "}" * 4000
-    started = time.monotonic()
+    started = time.process_time()
     toolemu.parse_tool_calls(text)
-    assert time.monotonic() - started < 2.0
+    assert time.process_time() - started < 2.0
 
 
 def test_strip_trailing_commas_keeps_comma_in_single_quoted_string() -> None:

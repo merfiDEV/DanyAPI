@@ -73,9 +73,9 @@ def test_a_tool_call_between_two_others_is_not_swallowed():
 
 def test_the_dsml_block_scan_is_linear_on_truncated_output():
     text = ("<||DSML||tool_calls>" + '<||DSML||invoke name="a">') * 4000
-    started = time.monotonic()
+    started = time.process_time()
     toolemu.parse_tool_calls(text, {"a": {}})
-    assert time.monotonic() - started < 10.0
+    assert time.process_time() - started < 10.0
 
 
 def test_the_dsml_block_scan_keeps_a_legitimate_large_body():
