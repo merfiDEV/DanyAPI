@@ -354,12 +354,18 @@ def has_dist_flag(pytest_args: list[str]) -> bool:
     return False
 
 
+def has_reorder_flag(pytest_args: list[str]) -> bool:
+    return any(arg in ("--loadscope-reorder", "--no-loadscope-reorder") for arg in pytest_args)
+
+
 def pytest_command(pytest_args: list[str], workers: int) -> list[str]:
     command = [sys.executable, "-m", "pytest", "-q"]
     if xdist is not None and workers > 1 and not has_numprocesses_flag(pytest_args):
         command += ["-n", str(workers)]
         if not has_dist_flag(pytest_args):
             command += ["--dist=loadfile"]
+        if not has_reorder_flag(pytest_args):
+            command += ["--no-loadscope-reorder"]
     command += ["--cov=danyapi", "--cov-report=term-missing", *pytest_args]
     return command
 

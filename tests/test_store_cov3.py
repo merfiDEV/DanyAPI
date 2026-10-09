@@ -28,12 +28,15 @@ def cache_dir(tmp_path, monkeypatch):
 class _Clock:
     def __init__(self, start: float) -> None:
         self.now = start
+        self.owner = threading.current_thread()
         self.on_sleep: Callable[[], None] | None = None
 
     def monotonic(self) -> float:
         return self.now
 
     def sleep(self, seconds: float) -> None:
+        if threading.current_thread() is not self.owner:
+            return
         self.now += seconds
         hook = self.on_sleep
         if hook is not None:
