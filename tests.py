@@ -1,17 +1,16 @@
 from __future__ import annotations
 
+import asyncio
 import base64
 import hashlib
 import importlib
 import json
+import os
 import re
 import shutil
-import subprocess
 import sys
-import threading
 import time
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, TypeAlias
 
@@ -25,6 +24,7 @@ def _optional_module(name: str) -> Any:
 
 tomllib: Any = _optional_module("tomllib") or _optional_module("tomli")
 yaml: Any = _optional_module("yaml")
+xdist: Any = _optional_module("xdist")
 
 ROOT = Path(__file__).resolve().parent
 OPTIONAL_ROOT_SCRIPTS = ["collecter.py"]
@@ -74,19 +74,22 @@ RESET = "\033[0m"
 
 USAGE = """usage: python tests.py [-j JOBS] [--full | --lean] [pytest args...]
 
-  -j, --jobs N   run independent checks in N threads
+  -j, --jobs N   run the independent checks in N concurrent slots
+                  (default: one per logical CPU the process may use)
       --full      also run the slow extra checks: pyright, pylint, flake8,
                   pyflakes, isort, bandit, vulture, clang-format, clang-tidy,
                   xenon, pip-audit and a dry run resolve of the requirements
       --lean      run only the always-on checks (the default)
   -h, --help      show this message
 
-The default profile is pytest plus the guards that catch the mistakes pytest
-cannot: the repo bans, the env key coverage, the dashboard CSP hash, a byte
-compile, ruff for lint and format, and mypy for types. That is about six
-seconds of overhead on top of pytest. The --full profile adds the rest,
-which is dominated by pyright and pylint and costs about a minute and a
-half on a warm cache.
+Every step runs asynchronously and the checks no longer wait for each
+other, so the wall clock tracks the slowest step. pytest itself is spread
+over the same CPUs with pytest-xdist when it is installed, and falls back
+to a single process when it is not or when -j 1 is given. The default
+profile is pytest plus the guards that catch the mistakes pytest cannot:
+the repo bans, the env key coverage, the dashboard CSP hash, a byte
+compile, ruff for lint and format, and mypy for types. The --full profile
+adds the rest, which is dominated by pyright and pylint.
 """
 
 STEP_TIMEOUT_SECONDS = 1200.0
@@ -97,6 +100,21 @@ STATUS_SKIP = "SKIP"
 
 StepRunner: TypeAlias = list[str] | Callable[[], tuple[bool, str]]
 StepResult: TypeAlias = tuple[str, str, float, str, str]
+
+
+def detect_cpu_count() -> int:
+    process_cpu_count = getattr(os, "process_cpu_count", None)
+    if process_cpu_count is not None:
+        count = process_cpu_count()
+        if count:
+            return count
+    sched_getaffinity = getattr(os, "sched_getaffinity", None)
+    if sched_getaffinity is not None:
+        try:
+            return len(sched_getaffinity(0))
+        except OSError:
+            pass
+    return os.cpu_count() or 1
 
 
 def paint(text: str, color: str, enabled: bool) -> str:
@@ -112,7 +130,7 @@ def status_paint(status: str, use_color: bool) -> str:
 
 
 def parse_args(argv: list[str]) -> tuple[int, list[str], bool]:
-    jobs = 1
+    jobs: int | None = None
     pytest_args: list[str] = []
     full = False
     i = 0
@@ -163,10 +181,10 @@ def parse_args(argv: list[str]) -> tuple[int, list[str], bool]:
             raise SystemExit(0)
         pytest_args.append(arg)
         i += 1
-    if jobs < 1:
+    if jobs is not None and jobs < 1:
         print(f"tests: job count must be at least 1, got {jobs}", file=sys.stderr)
         raise SystemExit(2)
-    return jobs, pytest_args, full
+    return jobs if jobs is not None else detect_cpu_count(), pytest_args, full
 
 
 def iter_guard_targets() -> list[Path]:
@@ -316,72 +334,74 @@ def check_repo_guards() -> tuple[bool, str]:
     return False, f"{len(problems)} problem(s):\n" + "\n".join(shown)
 
 
-def run_step(name: str, runner: StepRunner, timeout: float = STEP_TIMEOUT_SECONDS) -> StepResult:
-    started = time.monotonic()
-    if isinstance(runner, list):
-        cmd = runner
-        detail = " ".join(cmd)
-        if cmd[0] != sys.executable and name in TOOL_OPTIONAL_STEPS and shutil.which(cmd[0]) is None:
-            elapsed = time.monotonic() - started
-            return name, STATUS_SKIP, elapsed, f"tool not found: {cmd[0]}, step skipped", detail
-        try:
-            proc = subprocess.run(
-                cmd,
-                cwd=ROOT,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                check=False,
-                timeout=timeout,
-            )
-        except (FileNotFoundError, NotADirectoryError, PermissionError) as exc:
-            elapsed = time.monotonic() - started
-            return name, STATUS_FAIL, elapsed, f"tool not runnable: {cmd[0]} ({exc})", detail
-        except subprocess.TimeoutExpired:
-            elapsed = time.monotonic() - started
-            return (
-                name,
-                STATUS_FAIL,
-                elapsed,
-                f"timed out after {timeout:.0f}s: {cmd[0]}",
-                detail,
-            )
-        elapsed = time.monotonic() - started
-        ok = proc.returncode == 0
-        parts: list[str] = []
-        if proc.stdout:
-            parts.append(proc.stdout.rstrip())
-        if proc.stderr:
-            parts.append(proc.stderr.rstrip())
-        return name, (STATUS_PASS if ok else STATUS_FAIL), elapsed, "\n".join(parts), detail
-    try:
-        ok, output = runner()
-    except Exception as exc:
-        elapsed = time.monotonic() - started
-        return name, STATUS_FAIL, elapsed, f"step raised {type(exc).__name__}: {exc}", ""
-    elapsed = time.monotonic() - started
-    return name, (STATUS_PASS if ok else STATUS_FAIL), elapsed, output, ""
+def has_numprocesses_flag(pytest_args: list[str]) -> bool:
+    for arg in pytest_args:
+        if arg in ("-n", "--numprocesses"):
+            return True
+        if arg.startswith("--numprocesses="):
+            return True
+        if arg.startswith("-n") and len(arg) > 2 and arg[2:].isdigit():
+            return True
+    return False
 
 
-def print_step(result: StepResult, use_color: bool, lock: threading.Lock | None = None) -> None:
-    name, status, elapsed, output, detail = result
-    lines = ["", f"=== [{name}] {detail}".rstrip()]
-    if output:
-        lines.append(output)
-    lines.append(f"=== [{name}] {status_paint(status, use_color)} ({elapsed:.1f}s)")
-    text = "\n".join(lines)
-    if lock is None:
-        print(text)
-        return
-    with lock:
-        print(text)
+def has_dist_flag(pytest_args: list[str]) -> bool:
+    for arg in pytest_args:
+        if arg == "--dist":
+            return True
+        if arg.startswith("--dist="):
+            return True
+    return False
 
 
-def build_steps(pytest_args: list[str], full: bool = False) -> list[tuple[str, StepRunner]]:
+def pytest_command(pytest_args: list[str], workers: int) -> list[str]:
+    command = [sys.executable, "-m", "pytest", "-q"]
+    if xdist is not None and workers > 1 and not has_numprocesses_flag(pytest_args):
+        command += ["-n", str(workers)]
+        if not has_dist_flag(pytest_args):
+            command += ["--dist=loadfile"]
+    command += ["--cov=danyapi", "--cov-report=term-missing", *pytest_args]
+    return command
+
+
+def lint_targets() -> list[str]:
+    targets: list[str] = []
+    package = ROOT / "danyapi"
+    for path in sorted(package.iterdir()):
+        if path.name == "__pycache__":
+            continue
+        if path.is_dir():
+            if (path / "__init__.py").is_file():
+                targets.append(f"danyapi/{path.name}")
+        elif path.suffix == ".py":
+            targets.append(f"danyapi/{path.name}")
+    for directory in ("tests", "docs"):
+        base = ROOT / directory
+        if base.is_dir():
+            targets.extend(f"{directory}/{path.name}" for path in sorted(base.glob("*.py")))
+    targets.extend(ROOT_SCRIPTS)
+    return targets
+
+
+def chunk_targets(targets: list[str], buckets: int) -> list[list[str]]:
+    count = max(1, min(buckets, len(targets)))
+    chunks: list[list[str]] = [[] for _ in range(count)]
+    for index, target in enumerate(targets):
+        chunks[index % count].append(target)
+    return [chunk for chunk in chunks if chunk]
+
+
+def chunked_steps(name: str, base: list[str], targets: list[str], buckets: int) -> list[tuple[str, StepRunner]]:
+    chunks = chunk_targets(targets, buckets)
+    if len(chunks) == 1:
+        return [(name, [*base, *chunks[0]])]
+    return [(f"{name} {index + 1}/{len(chunks)}", [*base, *chunk]) for index, chunk in enumerate(chunks)]
+
+
+def build_steps(pytest_args: list[str], full: bool = False, workers: int = 1) -> list[tuple[str, StepRunner]]:
     steps: list[tuple[str, StepRunner]] = [
         ("repo guards", check_repo_guards),
-        ("py_compile", [sys.executable, "-m", "compileall", "-q", "-f", *PYTHON_TARGETS]),
+        *chunked_steps("py_compile", [sys.executable, "-m", "compileall", "-q", "-f"], PYTHON_TARGETS, workers),
         ("ruff check", [sys.executable, "-m", "ruff", "check", "."]),
         (
             "ruff format --check",
@@ -390,31 +410,13 @@ def build_steps(pytest_args: list[str], full: bool = False) -> list[tuple[str, S
         ("mypy", [sys.executable, "-m", "mypy", *PYTHON_TARGETS]),
     ]
     if not full:
-        steps.append(
-            (
-                "pytest",
-                [
-                    sys.executable,
-                    "-m",
-                    "pytest",
-                    "-q",
-                    "--cov=danyapi",
-                    "--cov-report=term-missing",
-                    *pytest_args,
-                ],
-            )
-        )
+        steps.append(("pytest", pytest_command(pytest_args, workers)))
         return steps
 
+    full_targets = lint_targets()
     steps.extend(
         [
-            ("isort --check", [sys.executable, "-m", "isort", "--check-only", "."]),
-            ("flake8", [sys.executable, "-m", "flake8"]),
-            ("pyflakes", [sys.executable, "-m", "pyflakes", *PYTHON_TARGETS]),
-            (
-                "pyright",
-                [sys.executable, "-m", "pyright", "--pythonpath", sys.executable, *PYTHON_TARGETS],
-            ),
+            ("pytest", pytest_command(pytest_args, workers)),
             (
                 "pylint",
                 [
@@ -428,41 +430,8 @@ def build_steps(pytest_args: list[str], full: bool = False) -> list[tuple[str, S
                 ],
             ),
             (
-                "bandit",
-                [sys.executable, "-m", "bandit", "-q", "-r", "danyapi", "-s", BANDIT_SKIPS, "-c", "bandit.toml"],
-            ),
-            (
-                "bandit root scripts",
-                [sys.executable, "-m", "bandit", "-q", *ROOT_SCRIPTS, "-s", ROOT_BANDIT_SKIPS, "-c", "bandit.toml"],
-            ),
-            ("vulture", [sys.executable, "-m", "vulture"]),
-            ("clang-format", ["clang-format", "--dry-run", *C_SOURCES]),
-            (
-                "clang-tidy",
-                [
-                    "clang-tidy",
-                    f"-checks={CLANG_TIDY_CHECKS}",
-                    *C_SOURCES,
-                    "--",
-                    "-std=c11",
-                    "-D_CRT_SECURE_NO_WARNINGS",
-                ],
-            ),
-            (
-                "xenon",
-                [
-                    sys.executable,
-                    "-m",
-                    "xenon",
-                    "--max-absolute",
-                    "F",
-                    "--max-modules",
-                    "D",
-                    "--max-average",
-                    "D",
-                    "danyapi",
-                    *ROOT_SCRIPTS,
-                ],
+                "pyright",
+                [sys.executable, "-m", "pyright", "--pythonpath", sys.executable, *PYTHON_TARGETS],
             ),
             (
                 "pip-audit",
@@ -481,6 +450,46 @@ def build_steps(pytest_args: list[str], full: bool = False) -> list[tuple[str, S
                 ],
             ),
             (
+                "clang-tidy",
+                [
+                    "clang-tidy",
+                    f"-checks={CLANG_TIDY_CHECKS}",
+                    *C_SOURCES,
+                    "--",
+                    "-std=c11",
+                    "-D_CRT_SECURE_NO_WARNINGS",
+                ],
+            ),
+            ("isort --check", [sys.executable, "-m", "isort", "--check-only", "."]),
+            ("flake8", [sys.executable, "-m", "flake8"]),
+            *chunked_steps("pyflakes", [sys.executable, "-m", "pyflakes"], full_targets, workers),
+            (
+                "bandit",
+                [sys.executable, "-m", "bandit", "-q", "-r", "danyapi", "-s", BANDIT_SKIPS, "-c", "bandit.toml"],
+            ),
+            (
+                "bandit root scripts",
+                [sys.executable, "-m", "bandit", "-q", *ROOT_SCRIPTS, "-s", ROOT_BANDIT_SKIPS, "-c", "bandit.toml"],
+            ),
+            ("vulture", [sys.executable, "-m", "vulture"]),
+            ("clang-format", ["clang-format", "--dry-run", *C_SOURCES]),
+            (
+                "xenon",
+                [
+                    sys.executable,
+                    "-m",
+                    "xenon",
+                    "--max-absolute",
+                    "F",
+                    "--max-modules",
+                    "D",
+                    "--max-average",
+                    "D",
+                    "danyapi",
+                    *ROOT_SCRIPTS,
+                ],
+            ),
+            (
                 "pip requirements resolve",
                 [
                     sys.executable,
@@ -496,21 +505,79 @@ def build_steps(pytest_args: list[str], full: bool = False) -> list[tuple[str, S
                     "requirements-dev.txt",
                 ],
             ),
-            (
-                "pytest",
-                [
-                    sys.executable,
-                    "-m",
-                    "pytest",
-                    "-q",
-                    "--cov=danyapi",
-                    "--cov-report=term-missing",
-                    *pytest_args,
-                ],
-            ),
         ]
     )
     return steps
+
+
+async def run_step(name: str, runner: StepRunner, timeout: float = STEP_TIMEOUT_SECONDS) -> StepResult:
+    started = time.monotonic()
+    if isinstance(runner, list):
+        cmd = runner
+        detail = " ".join(cmd)
+        if cmd[0] != sys.executable and name in TOOL_OPTIONAL_STEPS and shutil.which(cmd[0]) is None:
+            elapsed = time.monotonic() - started
+            return name, STATUS_SKIP, elapsed, f"tool not found: {cmd[0]}, step skipped", detail
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                cwd=ROOT,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+        except (FileNotFoundError, NotADirectoryError, PermissionError) as exc:
+            elapsed = time.monotonic() - started
+            return name, STATUS_FAIL, elapsed, f"tool not runnable: {cmd[0]} ({exc})", detail
+        try:
+            raw_out, raw_err = await asyncio.wait_for(proc.communicate(), timeout)
+        except asyncio.TimeoutError:
+            proc.kill()
+            await proc.wait()
+            elapsed = time.monotonic() - started
+            return name, STATUS_FAIL, elapsed, f"timed out after {timeout:.0f}s: {cmd[0]}", detail
+        elapsed = time.monotonic() - started
+        ok = proc.returncode == 0
+        parts: list[str] = []
+        stdout = (raw_out or b"").decode("utf-8", "replace").rstrip()
+        stderr = (raw_err or b"").decode("utf-8", "replace").rstrip()
+        if stdout:
+            parts.append(stdout)
+        if stderr:
+            parts.append(stderr)
+        return name, (STATUS_PASS if ok else STATUS_FAIL), elapsed, "\n".join(parts), detail
+    loop = asyncio.get_running_loop()
+    try:
+        ok, output = await loop.run_in_executor(None, runner)
+    except Exception as exc:
+        elapsed = time.monotonic() - started
+        return name, STATUS_FAIL, elapsed, f"step raised {type(exc).__name__}: {exc}", ""
+    elapsed = time.monotonic() - started
+    return name, (STATUS_PASS if ok else STATUS_FAIL), elapsed, output, ""
+
+
+def print_step(result: StepResult, use_color: bool) -> None:
+    name, status, elapsed, output, detail = result
+    lines = ["", f"=== [{name}] {detail}".rstrip()]
+    if output:
+        lines.append(output)
+    lines.append(f"=== [{name}] {status_paint(status, use_color)} ({elapsed:.1f}s)")
+    print("\n".join(lines))
+
+
+async def run_all(steps: list[tuple[str, StepRunner]], jobs: int, use_color: bool) -> list[StepResult]:
+    results: list[StepResult | None] = [None] * len(steps)
+    semaphore = asyncio.Semaphore(jobs)
+    print_lock = asyncio.Lock()
+
+    async def execute(index: int, name: str, runner: StepRunner) -> None:
+        async with semaphore:
+            result = await run_step(name, runner)
+        results[index] = result
+        async with print_lock:
+            print_step(result, use_color)
+
+    await asyncio.gather(*(execute(index, name, runner) for index, (name, runner) in enumerate(steps)))
+    return [result for result in results if result is not None]
 
 
 def main() -> int:
@@ -522,28 +589,10 @@ def main() -> int:
             except (ValueError, OSError):
                 pass
     jobs, pytest_args, full = parse_args(sys.argv[1:])
-    steps = build_steps(pytest_args, full)
+    steps = build_steps(pytest_args, full, jobs)
     use_color = sys.stdout.isatty()
     run_started = time.monotonic()
-    results: list[StepResult] = []
-    if jobs == 1:
-        for name, runner in steps:
-            result = run_step(name, runner)
-            results.append(result)
-            print_step(result, use_color)
-    else:
-        lock = threading.Lock()
-        collected: dict[int, StepResult] = {}
-        with ThreadPoolExecutor(max_workers=jobs) as pool:
-            futures = {pool.submit(run_step, name, runner): index for index, (name, runner) in enumerate(steps)}
-            for future in as_completed(futures):
-                result = future.result()
-                collected[futures[future]] = result
-                print_step(result, use_color, lock)
-        results = [collected[index] for index in range(len(steps)) if index in collected]
-        missing = [index for index in range(len(steps)) if index not in collected]
-        if missing:
-            raise RuntimeError(f"no results collected for steps at indexes {missing}")
+    results = asyncio.run(run_all(steps, jobs, use_color))
     wall_time = time.monotonic() - run_started
     print()
     print("======== SUMMARY ========")
