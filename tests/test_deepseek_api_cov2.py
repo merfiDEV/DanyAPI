@@ -822,8 +822,8 @@ async def test_stream_usage_chunk_is_emitted_only_when_requested(_recorded_usage
     with_usage = await _stream(FakeAccount([FakeResp(sse_text=OK_SSE_TOKENS)]), include_usage=True)
     usage_frames = [frame for frame in _frames(with_usage) if "usage" in frame]
     assert usage_frames[-1]["usage"] == {
-        "prompt_tokens": 1,
-        "completion_tokens": 39,
+        "prompt_tokens": 39,
+        "completion_tokens": 1,
         "total_tokens": 40,
         "prompt_tokens_details": {"cached_tokens": 0},
         "completion_tokens_details": {"reasoning_tokens": 0},

@@ -327,10 +327,18 @@ def _fake_context_error_body() -> dict:
 
 def _commit_usage(account, session, session_key: str, rec: MessageReconstructor, response_message_id: str | None, model: str, prompt: str, user) -> dict:
     request_tokens = _advance_session_usage(session, rec.accumulated_tokens)
-    usage = _deepseek_usage(request_tokens, prompt, rec.usage, completion_text=rec.content or rec.reasoning)
+    recorded = _deepseek_usage(request_tokens, prompt, rec.usage, completion_text=rec.content or rec.reasoning)
     account.sessions.touch_last_message(session_key, rec.id or response_message_id)
-    record_usage_dict("deepseek", model, usage, user=user, session_id=session_key)
-    return usage
+    record_usage_dict("deepseek", model, recorded, user=user, session_id=session_key)
+    cumulative_total = max(0, int(rec.accumulated_tokens or 0))
+    if cumulative_total:
+        completion_tokens = estimate_tokens(rec.content or rec.reasoning or "")
+        return {
+            "prompt_tokens": max(0, cumulative_total - completion_tokens),
+            "completion_tokens": completion_tokens,
+            "total_tokens": cumulative_total,
+        }
+    return recorded
 
 
 def _build_assistant_message(
